@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Loader2, Check, Copy, Upload, FileJson } from 'lucide-react';
+import { MessageCircle, X, Send, Loader2, Check, Copy, Upload, FileJson, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { updatePlace } from '@/services/places';
 import type { PlaceListItem, Place, UpdatePlaceRequest } from '@/types/api';
@@ -10,6 +10,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   extractedData?: UpdatePlaceRequest | null; // 从消息中提取的数据
+  geocodedAddress?: string; // 坐标对应的地址（用于地址不匹配时提供替换选项）
 }
 
 interface DeepSeekAssistantProps {
@@ -339,14 +340,19 @@ export default function DeepSeekAssistant({
 
   async function handleSend() {
     if (!input.trim() || loading) return;
+    await handleSendWithMessage(input);
+    setInput('');
+  }
+
+  async function handleSendWithMessage(message: string) {
+    if (!message.trim() || loading) return;
 
     const userMessage: Message = {
       role: 'user',
-      content: input,
+      content: message,
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInput('');
     setLoading(true);
 
     try {
@@ -392,9 +398,10 @@ ${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
   - 景点、公园 → ATTRACTION
   - 酒店、民宿 → HOTEL
 - address: 地址（可选，必须准确完整）
-  * **重要：地址信息以AI提供的为准**
-  * 如果AI提供了地址，系统会优先使用AI的地址，不会用反向地理编码或其他来源的地址覆盖
-  * AI应该提供准确、完整、详细的地址信息
+  * **重要：地址应使用坐标地址**
+  * 如果提供了经纬度坐标（location字段），地址应该基于坐标生成，确保地址与坐标完全一致
+  * 系统会优先使用AI提供的地址，但如果AI没有提供地址，系统会根据坐标自动通过反向地理编码获取地址
+  * AI应该提供准确、完整、详细的地址信息，优先使用坐标地址
 - description: 地点介绍（可选，详细介绍地点的特色、历史背景、推荐理由等）
 - rating: 评分，0-5之间的数字（可选）
 - googlePlaceId: Google Place ID（可选）
@@ -434,19 +441,22 @@ ${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
    - 如果是知名地点，使用国际通用的英文名称
 
 3. **地址 (address)**：
-   - 必须准确、完整、详细
-   - 包含完整的地址层级：国家/省/市/区/街道/门牌号
+   - **重要：地址应使用坐标地址，即根据经纬度坐标（location字段）生成的地址**
+   - 如果提供了经纬度坐标，必须根据坐标生成对应的准确地址
+   - 地址必须与经纬度坐标完全一致，确保坐标和地址匹配
+   - 必须准确、完整、详细，包含完整的地址层级：国家/省/市/区/街道/门牌号
    - 使用标准地址格式
    - 不要省略重要信息（如街道、门牌号等）
-   - 确保地址与经纬度坐标一致
    - 如果是中国地址，使用标准格式：省+市+区/县+街道+详细地址
-   - **重要：如果AI提供了地址，该地址会完全替换现有地址**
+   - **如果提供了坐标但没有地址，系统会自动通过反向地理编码获取坐标对应的地址，AI不需要猜测地址**
+   - **如果AI提供了地址，该地址会完全替换现有地址，但必须确保地址与坐标一致**
 
 4. **经纬度坐标 (location)**：
    - 必须准确，精确到小数点后至少4位
-   - 确保坐标与地址一致
-   - **重要：如果提供了经纬度但没有地址，系统会自动通过反向地理编码API获取准确地址，你不需要猜测或推断地址**
-   - 如果提供地址但没有坐标，可以根据地址推断（但要标注为推断值）
+   - **重要：地址必须基于坐标生成，确保坐标和地址完全匹配**
+   - **如果提供了经纬度但没有地址，系统会自动通过反向地理编码API获取坐标对应的准确地址，AI不需要猜测或推断地址**
+   - 如果提供地址但没有坐标，可以根据地址推断坐标（但要标注为推断值）
+   - **优先使用坐标地址：如果已有坐标，地址应该基于坐标生成，而不是使用其他来源的地址**
 
 重要输出规则：
 1. 当用户要求整理数据时，**只输出JSON格式的数据，不要添加任何说明文字**
@@ -483,8 +493,9 @@ ${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
 数据验证检查清单：
 - [ ] 中文名称是否准确、完整？
 - [ ] 英文名称是否使用官方或标准名称？
+- [ ] 地址是否基于坐标生成（坐标地址）？
 - [ ] 地址是否完整、详细、准确？
-- [ ] 地址与经纬度是否一致？
+- [ ] 地址与经纬度坐标是否完全一致？
 - [ ] 所有文本数据是否准确无误？
 
 示例输出格式：
@@ -577,6 +588,9 @@ ${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
         }
       }
       
+      // 存储可能不匹配的坐标地址，用于提供一键替换功能
+      let mismatchedGeocodedAddress: string | undefined;
+      
       // 如果提取到经纬度，尝试通过反向地理编码获取准确地址
       if (extractedData?.lat && extractedData?.lng) {
         // 如果没有地址，尝试根据坐标获取
@@ -594,13 +608,14 @@ ${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
           // 如果有地址，验证地址与坐标的一致性
           // 通过反向地理编码获取坐标对应的地址，然后比较
           try {
-            const geocodedAddress = await reverseGeocode(extractedData.lat, extractedData.lng);
-            if (geocodedAddress && geocodedAddress !== extractedData.address) {
-              // 地址不一致，提示用户
+            const geocodedAddr = await reverseGeocode(extractedData.lat, extractedData.lng);
+            if (geocodedAddr && geocodedAddr !== extractedData.address) {
+              // 地址不一致，提示用户（并存储geocodedAddress供后续使用）
+              mismatchedGeocodedAddress = geocodedAddr;
               content += `\n\n⚠️ **地址验证警告**：
 - 提供的地址：${extractedData.address}
-- 坐标对应的地址：${geocodedAddress}
-- 地址可能不匹配，建议使用坐标对应的地址`;
+- 坐标对应的地址：${geocodedAddr}
+- 地址可能不匹配，点击下方按钮可一键使用坐标地址`;
             }
           } catch (error) {
             console.error('地址验证失败:', error);
@@ -702,6 +717,7 @@ ${nearest.distance < 0.5 ? '✅ 距离很近，可能是同一地点' : nearest.
         role: 'assistant',
         content,
         extractedData,
+        geocodedAddress: mismatchedGeocodedAddress, // 存储坐标对应的地址，供一键替换使用
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -746,9 +762,12 @@ ${nearest.distance < 0.5 ? '✅ 距离很近，可能是同一地点' : nearest.
       }
       
       console.log('准备更新的数据（AI生成的数据将替换现有值）:', updateData);
+      console.log('其中地址字段:', updateData.address);
       
       if (onUpdate) {
+        console.log('调用 onUpdate 回调...');
         await onUpdate(placeId, updateData);
+        console.log('onUpdate 回调执行完成');
       } else {
         const result = await updatePlace(placeId, updateData);
         if (!result) {
@@ -1129,6 +1148,43 @@ ${errors.length > 0 ? '\n失败详情:\n' + errors.join('\n') : ''}`,
                     <div className="whitespace-pre-wrap text-sm">{message.content}</div>
                   </div>
                 </div>
+                {/* 使用坐标地址按钮（当地址不匹配时显示） */}
+                {message.role === 'assistant' &&
+                  message.geocodedAddress &&
+                  message.extractedData?.address &&
+                  message.geocodedAddress !== message.extractedData.address && (
+                    <div className="flex justify-start px-2 mb-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          // 更新消息中的extractedData.address为坐标地址
+                          setMessages((prev) =>
+                            prev.map((msg, idx) =>
+                              idx === index && msg.extractedData
+                                ? {
+                                    ...msg,
+                                    extractedData: {
+                                      ...msg.extractedData,
+                                      address: msg.geocodedAddress,
+                                    },
+                                    geocodedAddress: undefined, // 清除，因为已经使用了
+                                    content: msg.content.replace(
+                                      /⚠️ \*\*地址验证警告\*\*：[\s\S]*?点击下方按钮可一键使用坐标地址/,
+                                      `✅ **已使用坐标地址**：${msg.geocodedAddress}`
+                                    ),
+                                  }
+                                : msg
+                            )
+                          );
+                        }}
+                        className="text-xs bg-amber-100 hover:bg-amber-200 text-amber-800"
+                      >
+                        <MapPin className="mr-1 h-3 w-3" />
+                        使用坐标地址
+                      </Button>
+                    </div>
+                  )}
                 {/* 一键更新按钮 */}
                 {message.role === 'assistant' &&
                   message.extractedData !== null &&
@@ -1199,6 +1255,73 @@ ${errors.length > 0 ? '\n失败详情:\n' + errors.join('\n') : ''}`,
 
           {/* 输入框 */}
           <div className="border-t p-4">
+            {/* 快捷命令按钮 */}
+            <div className="mb-2 flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  handleSendWithMessage('请完善当前地点的数据，包括中文名称、英文名称、地址、描述等信息，确保数据准确完整。');
+                }}
+                disabled={loading}
+                className="text-xs h-7"
+                title="一键发送完善数据请求"
+              >
+                完善
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  handleSendWithMessage('请检查当前地点的数据完整性，包括必填字段、数据格式、数据准确性等。');
+                }}
+                disabled={loading}
+                className="text-xs h-7"
+                title="检查数据完整性"
+              >
+                检查
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  handleSendWithMessage('请根据当前地点的经纬度坐标，生成准确的地址信息。');
+                }}
+                disabled={loading}
+                className="text-xs h-7"
+                title="根据坐标生成地址"
+              >
+                生成地址
+              </Button>
+              {place && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    handleSendWithMessage('请根据当前地点的类型和特征，生成合适的物理元数据（如难度、预计停留时间、访问方式等）。');
+                  }}
+                  disabled={loading}
+                  className="text-xs h-7"
+                  title="生成物理元数据"
+                >
+                  物理元数据
+                </Button>
+              )}
+              {place && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    handleSendWithMessage('请修复当前地点数据中的问题，确保所有字段都准确无误。');
+                  }}
+                  disabled={loading}
+                  className="text-xs h-7"
+                  title="修复数据问题"
+                >
+                  修复
+                </Button>
+              )}
+            </div>
             <div className="flex gap-2">
               <textarea
                 value={input}

@@ -14,6 +14,7 @@ import type { ReadinessPack, UpdateReadinessPackRequest } from '@/types/api';
 import { RulesEditor } from '@/components/readiness/RulesEditor';
 import { ChecklistsEditor } from '@/components/readiness/ChecklistsEditor';
 import { HazardsEditor } from '@/components/readiness/HazardsEditor';
+import { ReadinessAssistant } from '@/components/readiness/ReadinessAssistant';
 
 export default function ReadinessPackDetailPage() {
   const params = useParams();
@@ -51,11 +52,26 @@ export default function ReadinessPackDetailPage() {
     setLoading(true);
     try {
       const packData = await getReadinessPackById(packId);
+      console.log('========== API 返回的原始数据 ==========');
+      console.log('完整数据:', JSON.stringify(packData, null, 2));
+      console.log('数据类型:', typeof packData);
+      console.log('数据键:', packData ? Object.keys(packData) : 'null');
+      
       if (packData) {
-        console.log('加载的Pack数据:', packData);
-        console.log('规则数据:', packData.rules);
-        console.log('清单数据:', packData.checklists);
-        console.log('风险数据:', packData.hazards);
+        console.log('规则数据:', packData.rules, '类型:', Array.isArray(packData.rules) ? 'Array' : typeof packData.rules);
+        console.log('清单数据:', packData.checklists, '类型:', Array.isArray(packData.checklists) ? 'Array' : typeof packData.checklists);
+        console.log('风险数据:', packData.hazards, '类型:', Array.isArray(packData.hazards) ? 'Array' : typeof packData.hazards);
+        
+        // 检查是否有其他可能的字段名
+        const allKeys = Object.keys(packData);
+        console.log('所有字段:', allKeys);
+        
+        // 查找包含 checklist 或 hazard 的字段
+        const checklistKeys = allKeys.filter(k => k.toLowerCase().includes('checklist') || k.toLowerCase().includes('list'));
+        const hazardKeys = allKeys.filter(k => k.toLowerCase().includes('hazard') || k.toLowerCase().includes('risk'));
+        console.log('可能的清单字段:', checklistKeys);
+        console.log('可能的风险字段:', hazardKeys);
+        
         setPack(packData);
         setFormData(packData);
       }
@@ -348,6 +364,18 @@ export default function ReadinessPackDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* 翻译助手 */}
+      <ReadinessAssistant
+        pack={formData}
+        onUpdate={(translatedData) => {
+          console.log('应用翻译数据:', translatedData);
+          setFormData((prev) => ({
+            ...prev,
+            ...translatedData,
+          }));
+        }}
+      />
     </div>
   );
 }

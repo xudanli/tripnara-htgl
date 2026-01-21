@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search, Eye, Edit, Trash2, MapPin } from 'lucide-react';
+import { Search, Eye, Edit, Trash2, MapPin, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getPlaces, deletePlace } from '@/services/places';
@@ -147,6 +147,12 @@ export default function PlacesPage() {
           <h1 className="text-3xl font-bold">地点/POI管理</h1>
           <p className="text-muted-foreground mt-2">管理系统中的所有地点</p>
         </div>
+        <Link href="/admin/places/duplicates">
+          <Button variant="outline">
+            <Copy className="mr-2 h-4 w-4" />
+            检测重复地点
+          </Button>
+        </Link>
       </div>
 
       {/* 搜索和筛选 */}

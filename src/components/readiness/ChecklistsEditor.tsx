@@ -6,19 +6,35 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { DataDebugView } from './DataDebugView';
+import type { ChecklistCategory } from '@/types/api';
+
+// 清单分类选项
+const CHECKLIST_CATEGORIES: { value: ChecklistCategory; label: string }[] = [
+  { value: 'documents', label: '证件文件' },
+  { value: 'clothing', label: '服装穿着' },
+  { value: 'gear', label: '装备器材' },
+  { value: 'electronics', label: '电子设备' },
+  { value: 'toiletries', label: '洗漱用品' },
+  { value: 'medicine', label: '药品医疗' },
+  { value: 'food', label: '食品饮料' },
+  { value: 'emergency', label: '应急物品' },
+  { value: 'booking', label: '预订确认' },
+  { value: 'other', label: '其他' },
+];
 
 interface ChecklistItem {
   id?: string;
   title?: string;
   description?: string;
   required?: boolean;
-  category?: string;
-  [key: string]: any;
+  category?: ChecklistCategory;
+  priority?: number;
+  [key: string]: unknown;
 }
 
 interface ChecklistsEditorProps {
-  value: any[];
-  onChange: (checklists: any[]) => void;
+  value: ChecklistItem[];
+  onChange: (checklists: ChecklistItem[]) => void;
 }
 
 export function ChecklistsEditor({ value = [], onChange }: ChecklistsEditorProps) {
@@ -41,7 +57,8 @@ export function ChecklistsEditor({ value = [], onChange }: ChecklistsEditorProps
       title: '',
       description: '',
       required: false,
-      category: '',
+      category: 'other',
+      priority: checklists.length + 1,
     };
     const updated = [...checklists, newItem];
     setChecklists(updated);
@@ -54,7 +71,7 @@ export function ChecklistsEditor({ value = [], onChange }: ChecklistsEditorProps
     onChange(updated);
   };
 
-  const handleChange = (index: number, field: string, value: any) => {
+  const handleChange = (index: number, field: string, value: unknown) => {
     const updated = [...checklists];
     updated[index] = { ...updated[index], [field]: value };
     setChecklists(updated);
@@ -98,6 +115,11 @@ export function ChecklistsEditor({ value = [], onChange }: ChecklistsEditorProps
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <GripVertical className="h-4 w-4" />
                   <span className="text-sm font-medium">清单项 #{index + 1}</span>
+                  {item.category && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-muted">
+                      {CHECKLIST_CATEGORIES.find(c => c.value === item.category)?.label || item.category}
+                    </span>
+                  )}
                 </div>
                 <Button
                   type="button"
@@ -114,7 +136,7 @@ export function ChecklistsEditor({ value = [], onChange }: ChecklistsEditorProps
                 <div>
                   <label className="block text-xs font-medium mb-1">标题</label>
                   <Input
-                    value={item.title || ''}
+                    value={typeof item.title === 'string' ? item.title : ''}
                     onChange={(e) => handleChange(index, 'title', e.target.value)}
                     placeholder="清单项标题"
                   />
@@ -122,19 +144,35 @@ export function ChecklistsEditor({ value = [], onChange }: ChecklistsEditorProps
                 <div>
                   <label className="block text-xs font-medium mb-1">描述</label>
                   <Textarea
-                    value={item.description || ''}
+                    value={typeof item.description === 'string' ? item.description : ''}
                     onChange={(e) => handleChange(index, 'description', e.target.value)}
                     placeholder="清单项描述"
                     rows={2}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-medium mb-1">分类</label>
+                    <select
+                      value={item.category || 'other'}
+                      onChange={(e) => handleChange(index, 'category', e.target.value as ChecklistCategory)}
+                      className="w-full px-3 py-2 border rounded-md text-sm"
+                    >
+                      {CHECKLIST_CATEGORIES.map(cat => (
+                        <option key={cat.value} value={cat.value}>
+                          {cat.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">优先级</label>
                     <Input
-                      value={item.category || ''}
-                      onChange={(e) => handleChange(index, 'category', e.target.value)}
-                      placeholder="分类"
+                      type="number"
+                      min={1}
+                      value={item.priority || index + 1}
+                      onChange={(e) => handleChange(index, 'priority', parseInt(e.target.value) || 1)}
+                      placeholder="1"
                     />
                   </div>
                   <div className="flex items-center gap-2 pt-6">

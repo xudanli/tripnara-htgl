@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, MapPin } from 'lucide-react';
+import { ArrowLeft, Save, MapPin, ChevronUp, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { getPlaceById, updatePlace } from '@/services/places';
-import type { Place, UpdatePlaceRequest, PlaceCategory } from '@/types/api';
+import { getPlaceById, updatePlace, getPlaces } from '@/services/places';
+import type { Place, UpdatePlaceRequest, PlaceCategory, PlaceListItem } from '@/types/api';
 import DeepSeekAssistant from '@/components/places/DeepSeekAssistant';
 
 const categoryLabels: Record<PlaceCategory, string> = {
@@ -29,6 +29,9 @@ export default function PlaceDetailPage() {
   const [place, setPlace] = useState<Place | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [prevPlaceId, setPrevPlaceId] = useState<number | null>(null);
+  const [nextPlaceId, setNextPlaceId] = useState<number | null>(null);
+  const [loadingNeighbors, setLoadingNeighbors] = useState(false);
   const [formData, setFormData] = useState<UpdatePlaceRequest>({
     nameCN: '',
     nameEN: '',
@@ -45,10 +48,36 @@ export default function PlaceDetailPage() {
   });
 
   useEffect(() => {
-    if (placeId) {
+    if (placeId && !isNaN(placeId)) {
       loadPlace();
+      // 同时加载相邻地点，不依赖place，因为loadNeighborPlaces内部会处理
+      loadNeighborPlaces();
     }
-  }, [placeId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeId, params.id]);
+
+  // 键盘快捷键支持
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Ctrl/Cmd + 上箭头：上一条
+      if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (prevPlaceId) {
+          handleNavigateToPlace(prevPlaceId);
+        }
+      }
+      // Ctrl/Cmd + 下箭头：下一条
+      if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (nextPlaceId) {
+          handleNavigateToPlace(nextPlaceId);
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [prevPlaceId, nextPlaceId]);
 
   async function loadPlace() {
     setLoading(true);
@@ -76,6 +105,135 @@ export default function PlaceDetailPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadNeighborPlaces() {
+    setLoadingNeighbors(true);
+    try {
+      console.log('开始加载相邻地点，当前地点ID:', placeId);
+      
+      // 使用新接口，按ID降序排序（默认），这样可以更高效地找到相邻地点
+      const limit = 100;
+      const firstPage = await getPlaces({
+        limit,
+        page: 1,
+        orderBy: 'id',
+        orderDirection: 'desc', // 默认降序
+      });
+
+      if (!firstPage) {
+        console.warn('获取地点列表失败: result is null');
+        setPrevPlaceId(null);
+        setNextPlaceId(null);
+        return;
+      }
+
+      console.log(`地点总数: ${firstPage.total}, 总页数: ${firstPage.totalPages}`);
+
+      // 在第一页查找当前地点
+      const firstPageIndex = firstPage.places.findIndex((p: PlaceListItem) => p.id === placeId);
+      if (firstPageIndex !== -1) {
+        // 在第一页找到了
+        const prevId = firstPageIndex > 0 ? firstPage.places[firstPageIndex - 1].id : null;
+        const nextId = firstPageIndex < firstPage.places.length - 1 ? firstPage.places[firstPageIndex + 1].id : null;
+        console.log(`在第一页找到当前地点，位置: ${firstPageIndex + 1}/${firstPage.places.length}`);
+        console.log(`设置相邻地点 - 上一条: ${prevId}, 下一条: ${nextId}`);
+        setPrevPlaceId(prevId);
+        setNextPlaceId(nextId);
+        return;
+      }
+
+      // 如果第一页没找到，需要查找更多页面
+      // 计算当前地点可能在哪一页（基于ID排序）
+      let allPlaces: PlaceListItem[] = [...firstPage.places];
+      let currentPage = 1;
+      let found = false;
+
+      // 继续获取剩余页面，直到找到当前地点
+      while (currentPage < firstPage.totalPages && !found) {
+        currentPage++;
+        console.log(`正在获取第 ${currentPage} 页地点数据...`);
+        
+        const result = await getPlaces({
+          limit,
+          page: currentPage,
+          orderBy: 'id',
+          orderDirection: 'desc',
+        });
+
+        if (!result || result.places.length === 0) {
+          break;
+        }
+
+        allPlaces = [...allPlaces, ...result.places];
+
+        // 检查当前地点是否在这一页
+        const currentIndex = result.places.findIndex((p: PlaceListItem) => p.id === placeId);
+        if (currentIndex !== -1) {
+          found = true;
+          // 计算在整个列表中的位置
+          const globalIndex = (currentPage - 1) * limit + currentIndex;
+          console.log(`在第 ${currentPage} 页找到当前地点，在列表中的位置: ${globalIndex + 1}/${allPlaces.length}`);
+
+          const prevId = globalIndex > 0 ? allPlaces[globalIndex - 1].id : null;
+          const nextId = globalIndex < allPlaces.length - 1 ? allPlaces[globalIndex + 1].id : null;
+          
+          console.log(`设置相邻地点 - 上一条: ${prevId}, 下一条: ${nextId}`);
+          setPrevPlaceId(prevId);
+          setNextPlaceId(nextId);
+          return;
+        }
+
+        // 如果这一页已经填满，继续下一页
+        if (result.places.length < limit) {
+          break;
+        }
+      }
+
+      // 如果遍历了所有页面还没找到，在整个列表中查找
+      if (!found && allPlaces.length > 0) {
+        console.log('在所有已获取的地点中查找当前地点...');
+        const globalIndex = allPlaces.findIndex((p: PlaceListItem) => p.id === placeId);
+        if (globalIndex !== -1) {
+          console.log(`在整个列表中找到当前地点，位置: ${globalIndex + 1}/${allPlaces.length}`);
+          const prevId = globalIndex > 0 ? allPlaces[globalIndex - 1].id : null;
+          const nextId = globalIndex < allPlaces.length - 1 ? allPlaces[globalIndex + 1].id : null;
+          console.log(`设置相邻地点 - 上一条: ${prevId}, 下一条: ${nextId}`);
+          setPrevPlaceId(prevId);
+          setNextPlaceId(nextId);
+        } else {
+          console.warn(`未找到当前地点 ID ${placeId}，已获取 ${allPlaces.length} 个地点`);
+          console.warn('前10个地点ID:', allPlaces.slice(0, 10).map(p => p.id));
+          setPrevPlaceId(null);
+          setNextPlaceId(null);
+        }
+      } else if (!found) {
+        console.warn('未找到当前地点，且没有获取到任何地点数据');
+        setPrevPlaceId(null);
+        setNextPlaceId(null);
+      }
+    } catch (error) {
+      console.error('加载相邻地点失败:', error);
+      setPrevPlaceId(null);
+      setNextPlaceId(null);
+    } finally {
+      setLoadingNeighbors(false);
+      console.log('相邻地点加载完成');
+    }
+  }
+
+  function handleNavigateToPlace(placeId: number) {
+    if (!placeId) {
+      console.warn('placeId is null or undefined');
+      return;
+    }
+    if (placeId === place?.id) {
+      console.warn('已经是当前地点，无需切换');
+      return;
+    }
+    console.log('导航到地点:', placeId, '当前地点:', place?.id);
+    // 使用 router.push 进行导航，Next.js 会自动处理路由变化
+    router.push(`/admin/places/${placeId}`);
   }
 
   async function handleSave() {
@@ -112,15 +270,68 @@ export default function PlaceDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/admin/places">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link href="/admin/places">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold">地点详情</h1>
+            <p className="text-muted-foreground mt-2">编辑地点信息</p>
+          </div>
+        </div>
+        {/* 上一条、下一条导航按钮 */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('点击上一条按钮，prevPlaceId:', prevPlaceId);
+              if (prevPlaceId) {
+                handleNavigateToPlace(prevPlaceId);
+              } else {
+                console.warn('prevPlaceId is null，无法导航');
+                alert('没有上一条地点');
+              }
+            }}
+            disabled={loadingNeighbors}
+            title={prevPlaceId ? `上一条 (ID: ${prevPlaceId})` : loadingNeighbors ? '加载中...' : '没有上一条'}
+          >
+            <ChevronUp className="h-4 w-4" />
           </Button>
-        </Link>
-        <div>
-          <h1 className="text-3xl font-bold">地点详情</h1>
-          <p className="text-muted-foreground mt-2">编辑地点信息</p>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('点击下一条按钮，nextPlaceId:', nextPlaceId);
+              if (nextPlaceId) {
+                handleNavigateToPlace(nextPlaceId);
+              } else {
+                console.warn('nextPlaceId is null，无法导航');
+                alert('没有下一条地点');
+              }
+            }}
+            disabled={loadingNeighbors}
+            title={nextPlaceId ? `下一条 (ID: ${nextPlaceId})` : loadingNeighbors ? '加载中...' : '没有下一条'}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+          {/* 调试信息（开发环境） */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-xs text-muted-foreground ml-2">
+              {loadingNeighbors ? '加载中...' : (
+                <>
+                  {prevPlaceId ? `上:${prevPlaceId}` : '无上'} | {nextPlaceId ? `下:${nextPlaceId}` : '无下'}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -407,24 +618,27 @@ export default function PlaceDetailPage() {
               lng: data.lng !== undefined ? data.lng : (data as any).location?.lng,
             };
             
+            console.log('准备发送到服务器的数据:', updateData);
+            
             const updated = await updatePlace(placeId, updateData);
             if (updated) {
               setPlace(updated);
-              setFormData({
-                nameCN: updated.nameCN || '',
-                nameEN: updated.nameEN || '',
-                category: updated.category,
-                address: updated.address || '',
-                description: updated.description || '',
-                lat: updated.location?.lat,
-                lng: updated.location?.lng,
-                cityId: updated.city?.id,
-                googlePlaceId: updated.googlePlaceId || '',
-                rating: updated.rating,
-                metadata: updated.metadata || {},
-                physicalMetadata: updated.physicalMetadata || {},
-              });
-              alert('更新成功！');
+              // 重要：优先使用发送的数据来更新表单，因为服务器可能不返回完整的更新后数据
+              setFormData((prev) => ({
+                nameCN: updateData.nameCN !== undefined ? updateData.nameCN : (updated.nameCN || ''),
+                nameEN: updateData.nameEN !== undefined ? updateData.nameEN : (updated.nameEN || ''),
+                category: updateData.category !== undefined ? updateData.category : updated.category,
+                address: updateData.address !== undefined ? updateData.address : (updated.address || ''),
+                description: updateData.description !== undefined ? updateData.description : (updated.description || ''),
+                lat: updateData.lat !== undefined ? updateData.lat : updated.location?.lat,
+                lng: updateData.lng !== undefined ? updateData.lng : updated.location?.lng,
+                cityId: updateData.cityId !== undefined ? updateData.cityId : updated.city?.id,
+                googlePlaceId: updateData.googlePlaceId !== undefined ? updateData.googlePlaceId : (updated.googlePlaceId || ''),
+                rating: updateData.rating !== undefined ? updateData.rating : updated.rating,
+                metadata: updateData.metadata !== undefined ? updateData.metadata : (updated.metadata || {}),
+                physicalMetadata: updateData.physicalMetadata !== undefined ? updateData.physicalMetadata : (updated.physicalMetadata || {}),
+              }));
+              console.log('表单已更新，使用的数据:', updateData);
             } else {
               throw new Error('更新失败');
             }

@@ -13,13 +13,25 @@ import type {
 
 /**
  * 获取地点列表
+ * 使用 /places/admin 接口
  */
 export async function getPlaces(
   params?: GetPlacesParams
 ): Promise<GetPlacesResponse | null> {
+  // 构建查询参数，过滤掉 undefined 值
+  const queryParams: Record<string, string | number | boolean> = {};
+  if (params?.page !== undefined) queryParams.page = params.page;
+  if (params?.limit !== undefined) queryParams.limit = params.limit;
+  if (params?.search) queryParams.search = params.search;
+  if (params?.category) queryParams.category = params.category;
+  if (params?.cityId !== undefined) queryParams.cityId = params.cityId;
+  if (params?.countryCode) queryParams.countryCode = params.countryCode;
+  if (params?.orderBy) queryParams.orderBy = params.orderBy;
+  if (params?.orderDirection) queryParams.orderDirection = params.orderDirection;
+
   const response = await apiGet<GetPlacesResponse>(
     '/places/admin',
-    params as Record<string, string | number | boolean | undefined>,
+    queryParams,
     {
       requireAuth: false, // 根据文档，地点接口无需认证
     }

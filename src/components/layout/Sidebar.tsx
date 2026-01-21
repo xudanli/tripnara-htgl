@@ -8,6 +8,16 @@ import {
   MessageSquare,
   MapPin,
   Package,
+  Route,
+  FileText,
+  Brain,
+  Plane,
+  GitBranch,
+  Monitor,
+  PlayCircle,
+  Workflow,
+  Search,
+  Cpu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +27,16 @@ const navigation = [
   { name: '联系消息', href: '/admin/messages', icon: MessageSquare },
   { name: '准备度Pack', href: '/admin/readiness', icon: Package },
   { name: '地点管理', href: '/admin/places', icon: MapPin },
+  { name: '路线方向', href: '/admin/route-directions', icon: Route },
+  { name: 'Context管理', href: '/admin/context', icon: FileText },
+  { name: 'RL Training', href: '/admin/training', icon: Brain },
+  { name: '行程管理', href: '/admin/trips', icon: Plane },
+  { name: '决策日志', href: '/admin/decision', icon: GitBranch },
+  { name: 'Agent运行', href: '/admin/agent-runs', icon: PlayCircle },
+  { name: '规划工作台', href: '/admin/planning-workbench', icon: Workflow },
+  { name: '系统监控', href: '/admin/system', icon: Monitor },
+  { name: 'RAG管理', href: '/admin/rag', icon: Search },
+  { name: 'LLM管理', href: '/admin/llm', icon: Cpu },
 ];
 
 export function Sidebar() {

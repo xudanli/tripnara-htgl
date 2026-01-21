@@ -45,9 +45,11 @@ export default function ReadinessPacksPage() {
 
     try {
       const result = await deleteReadinessPack(packId);
-      if (result) {
+      if (result?.deleted) {
         alert('删除成功');
         loadPacks();
+      } else {
+        alert('删除失败，请重试');
       }
     } catch (error) {
       console.error('删除失败:', error);
@@ -67,11 +69,19 @@ export default function ReadinessPacksPage() {
     setParams((prev) => ({ ...prev, page }));
   }
 
-  function getDisplayName(displayName: string | { en: string; zh?: string }): string {
-    if (typeof displayName === 'string') {
-      return displayName;
+  // 获取本地化显示名称（优先中文）
+  function getLocalizedName(pack: ReadinessPackListItem): string {
+    return pack.displayNameCN || pack.displayNameEN || pack.displayName || '-';
+  }
+
+  // 获取本地化区域/城市
+  function getLocalizedLocation(pack: ReadinessPackListItem): string {
+    const region = pack.regionCN || pack.regionEN || pack.region;
+    const city = pack.cityCN || pack.cityEN || pack.city;
+    if (region && city) {
+      return `${region} / ${city}`;
     }
-    return displayName.zh || displayName.en;
+    return region || city || '-';
   }
 
   return (
@@ -96,7 +106,7 @@ export default function ReadinessPacksPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="搜索Pack ID或显示名称..."
+              placeholder="搜索（支持中英文）..."
               className="w-full pl-10 pr-4 py-2 border rounded-md"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -114,7 +124,7 @@ export default function ReadinessPacksPage() {
             setParams((prev) => ({
               ...prev,
               page: 1,
-              countryCode: e.target.value || undefined,
+              countryCode: e.target.value.toUpperCase() || undefined,
             }))
           }
         />
@@ -152,7 +162,7 @@ export default function ReadinessPacksPage() {
                   <tr>
                     <th className="px-6 py-3 text-left text-sm font-medium">Pack ID</th>
                     <th className="px-6 py-3 text-left text-sm font-medium">显示名称</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium">目的地ID</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium">区域/城市</th>
                     <th className="px-6 py-3 text-left text-sm font-medium">国家</th>
                     <th className="px-6 py-3 text-left text-sm font-medium">版本</th>
                     <th className="px-6 py-3 text-left text-sm font-medium">状态</th>
@@ -162,9 +172,16 @@ export default function ReadinessPacksPage() {
                 <tbody className="divide-y">
                   {packs.map((pack) => (
                     <tr key={pack.id} className="hover:bg-muted/50">
-                      <td className="px-6 py-4 text-sm font-mono">{pack.packId}</td>
-                      <td className="px-6 py-4 text-sm">{getDisplayName(pack.displayName)}</td>
-                      <td className="px-6 py-4 text-sm">{pack.destinationId}</td>
+                      <td className="px-6 py-4 text-sm font-mono text-xs">{pack.packId}</td>
+                      <td className="px-6 py-4 text-sm">
+                        <div>{getLocalizedName(pack)}</div>
+                        {pack.displayNameEN && pack.displayNameCN && (
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {pack.displayNameEN}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm">{getLocalizedLocation(pack)}</td>
                       <td className="px-6 py-4 text-sm">{pack.countryCode}</td>
                       <td className="px-6 py-4 text-sm">{pack.version}</td>
                       <td className="px-6 py-4 text-sm">
