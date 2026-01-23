@@ -26,6 +26,22 @@ import type {
   LLMUsageStatsBySubAgent,
   GetLLMCostParams,
   LLMCostResponse,
+  // RAG 评估
+  EvaluateRAGRequest,
+  EvaluateRAGResponse,
+  EvaluateRAGBatchRequest,
+  EvaluateRAGBatchResponse,
+  // query-document 对收集
+  CollectQueryPairRequest,
+  CollectQueryPairResponse,
+  CollectQueryPairFromQueryRequest,
+  CollectQueryPairFromQueryResponse,
+  CollectQueryPairBatchRequest,
+  CollectQueryPairBatchResponse,
+  GetQueryPairsParams,
+  GetQueryPairsResponse,
+  ExportQueryPairsForEvaluationRequest,
+  ExportQueryPairsForEvaluationResponse,
 } from '@/types/api';
 
 // ==================== RAG 管理 API（后端管理）====================
@@ -337,6 +353,163 @@ export async function deleteRAGDocument(id: string): Promise<DeleteRAGDocumentRe
   }
 
   console.error('删除文档失败:', response.error);
+  return null;
+}
+
+// ==================== RAG 检索质量评估管理 ====================
+
+/**
+ * 评估单次检索质量
+ * POST /api/rag/evaluation/evaluate
+ */
+export async function evaluateRAG(
+  data: EvaluateRAGRequest
+): Promise<EvaluateRAGResponse | null> {
+  const response = await apiPost<EvaluateRAGResponse>(
+    '/rag/evaluation/evaluate',
+    data,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('评估检索质量失败:', response.error);
+  return null;
+}
+
+/**
+ * 批量评估检索质量
+ * POST /api/rag/evaluation/evaluate-batch
+ */
+export async function evaluateRAGBatch(
+  data: EvaluateRAGBatchRequest
+): Promise<EvaluateRAGBatchResponse | null> {
+  const response = await apiPost<EvaluateRAGBatchResponse>(
+    '/rag/evaluation/evaluate-batch',
+    data,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('批量评估检索质量失败:', response.error);
+  return null;
+}
+
+// ==================== query-document 对收集管理 ====================
+
+/**
+ * 收集 query-document 对
+ * POST /api/rag/query-pairs/collect
+ */
+export async function collectQueryPair(
+  data: CollectQueryPairRequest
+): Promise<CollectQueryPairResponse | null> {
+  const response = await apiPost<CollectQueryPairResponse>(
+    '/rag/query-pairs/collect',
+    data,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('收集 query-document 对失败:', response.error);
+  return null;
+}
+
+/**
+ * 从用户查询自动收集
+ * POST /api/rag/query-pairs/collect-from-query
+ */
+export async function collectQueryPairFromQuery(
+  data: CollectQueryPairFromQueryRequest
+): Promise<CollectQueryPairFromQueryResponse | null> {
+  const response = await apiPost<CollectQueryPairFromQueryResponse>(
+    '/rag/query-pairs/collect-from-query',
+    data,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('从用户查询自动收集失败:', response.error);
+  return null;
+}
+
+/**
+ * 批量收集 query-document 对
+ * POST /api/rag/query-pairs/collect-batch
+ */
+export async function collectQueryPairBatch(
+  data: CollectQueryPairBatchRequest
+): Promise<CollectQueryPairBatchResponse | null> {
+  const response = await apiPost<CollectQueryPairBatchResponse>(
+    '/rag/query-pairs/collect-batch',
+    data,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('批量收集 query-document 对失败:', response.error);
+  return null;
+}
+
+/**
+ * 获取收集的 query-document 对
+ * GET /api/rag/query-pairs
+ */
+export async function getQueryPairs(
+  params?: GetQueryPairsParams
+): Promise<GetQueryPairsResponse | null> {
+  const queryParams: Record<string, string | number | undefined> = {};
+  if (params?.source) queryParams.source = params.source;
+  if (params?.collection) queryParams.collection = params.collection;
+  if (params?.countryCode) queryParams.countryCode = params.countryCode;
+  if (params?.limit !== undefined) queryParams.limit = params.limit;
+
+  const response = await apiGet<GetQueryPairsResponse>(
+    '/rag/query-pairs',
+    queryParams,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('获取 query-document 对失败:', response.error);
+  return null;
+}
+
+/**
+ * 导出为评估数据集格式
+ * POST /api/rag/query-pairs/export-for-evaluation
+ */
+export async function exportQueryPairsForEvaluation(
+  data: ExportQueryPairsForEvaluationRequest
+): Promise<ExportQueryPairsForEvaluationResponse | null> {
+  const response = await apiPost<ExportQueryPairsForEvaluationResponse>(
+    '/rag/query-pairs/export-for-evaluation',
+    data,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('导出评估数据集失败:', response.error);
   return null;
 }
 

@@ -47,6 +47,17 @@ import type {
   AssignUserToAbTestRequest,
   AssignUserToAbTestResponse,
   AnalyzeAbTestResponse,
+  // 模型版本 A/B 测试管理
+  CreateModelAbTestRequest,
+  CreateModelAbTestResponse,
+  AnalyzeModelAbTestRequest,
+  AnalyzeModelAbTestResponse,
+  PromoteModelVersionRequest,
+  PromoteModelVersionResponse,
+  // 迭代部署工作流管理
+  ExecuteWorkflowRequest,
+  ExecuteWorkflowResponse,
+  GetWorkflowStatusResponse,
   // 安全审计
   RecordAuditRequest,
   RecordAuditResponse,
@@ -794,7 +805,9 @@ export async function exportBatchJson(
   batchId: string
 ): Promise<ExportBatchJsonResponse | null> {
   const response = await apiGet<ExportBatchJsonResponse>(
-    `/api/training/batches/${batchId}/export/json`
+    `/api/training/batches/${batchId}/export/json`,
+    undefined,
+    { requireAuth: false }
   );
 
   if (response.success) {
@@ -802,6 +815,115 @@ export async function exportBatchJson(
   }
 
   console.error('导出JSON失败:', response.error);
+  return null;
+}
+
+// ==================== 迭代部署工作流管理 ====================
+
+/**
+ * 执行迭代部署工作流
+ * POST /api/training/workflows/execute
+ */
+export async function executeWorkflow(
+  data: ExecuteWorkflowRequest
+): Promise<ExecuteWorkflowResponse | null> {
+  const response = await apiPost<ExecuteWorkflowResponse>(
+    '/api/training/workflows/execute',
+    data,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('执行工作流失败:', response.error);
+  return null;
+}
+
+/**
+ * 获取工作流状态
+ * GET /api/training/workflows/:workflowId
+ */
+export async function getWorkflowStatus(
+  workflowId: string
+): Promise<GetWorkflowStatusResponse | null> {
+  const response = await apiGet<GetWorkflowStatusResponse>(
+    `/api/training/workflows/${workflowId}`,
+    undefined,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('获取工作流状态失败:', response.error);
+  return null;
+}
+
+// ==================== 模型版本 A/B 测试管理 ====================
+
+/**
+ * 创建模型版本对比实验
+ * POST /api/training/models/ab-test/create
+ */
+export async function createModelAbTest(
+  data: CreateModelAbTestRequest
+): Promise<CreateModelAbTestResponse | null> {
+  const response = await apiPost<CreateModelAbTestResponse>(
+    '/api/training/models/ab-test/create',
+    data,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('创建模型版本 A/B 测试失败:', response.error);
+  return null;
+}
+
+/**
+ * 分析模型版本对比结果
+ * POST /api/training/models/ab-test/analyze
+ */
+export async function analyzeModelAbTest(
+  data: AnalyzeModelAbTestRequest
+): Promise<AnalyzeModelAbTestResponse | null> {
+  const response = await apiPost<AnalyzeModelAbTestResponse>(
+    '/api/training/models/ab-test/analyze',
+    data,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('分析模型版本 A/B 测试失败:', response.error);
+  return null;
+}
+
+/**
+ * 推广模型版本
+ * POST /api/training/models/ab-test/promote
+ */
+export async function promoteModelVersion(
+  data: PromoteModelVersionRequest
+): Promise<PromoteModelVersionResponse | null> {
+  const response = await apiPost<PromoteModelVersionResponse>(
+    '/api/training/models/ab-test/promote',
+    data,
+    { requireAuth: false }
+  );
+
+  if (response.success) {
+    return response.data;
+  }
+
+  console.error('推广模型版本失败:', response.error);
   return null;
 }
 

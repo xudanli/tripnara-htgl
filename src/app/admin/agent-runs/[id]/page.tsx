@@ -123,12 +123,17 @@ export default function AgentRunDetailPage() {
                 <Badge variant="outline">{run.planningPhase}</Badge>
               </div>
             </div>
-            <div>
-              <Label>Current Agent</Label>
-              <div className="mt-1">
-                <Badge variant="outline">{run.currentAgent}</Badge>
-              </div>
-            </div>
+            {(() => {
+              const currentAgent = run.metadata?.currentAgent;
+              return currentAgent && typeof currentAgent === 'string' ? (
+                <div>
+                  <Label>Current Agent</Label>
+                  <div className="mt-1">
+                    <Badge variant="outline">{currentAgent}</Badge>
+                  </div>
+                </div>
+              ) : null;
+            })()}
             {run.duration !== undefined && (
               <div>
                 <Label>Duration</Label>
@@ -136,19 +141,11 @@ export default function AgentRunDetailPage() {
               </div>
             )}
             <div>
-              <Label>创建时间</Label>
+              <Label>开始时间</Label>
               <div className="text-sm mt-1">
-                {new Date(run.createdAt).toLocaleString('zh-CN')}
+                {new Date(run.startedAt).toLocaleString('zh-CN')}
               </div>
             </div>
-            {run.updatedAt && (
-              <div>
-                <Label>更新时间</Label>
-                <div className="text-sm mt-1">
-                  {new Date(run.updatedAt).toLocaleString('zh-CN')}
-                </div>
-              </div>
-            )}
             {run.completedAt && (
               <div>
                 <Label>完成时间</Label>
@@ -162,14 +159,19 @@ export default function AgentRunDetailPage() {
       </Card>
 
       {/* User Query */}
-      <Card>
-        <CardHeader>
-          <CardTitle>User Query</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-sm whitespace-pre-wrap">{run.userQuery}</div>
-        </CardContent>
-      </Card>
+      {(() => {
+        const userQuery = run.metadata?.userQuery;
+        return userQuery && typeof userQuery === 'string' ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>User Query</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm whitespace-pre-wrap">{userQuery}</div>
+            </CardContent>
+          </Card>
+        ) : null;
+      })()}
 
       {/* Attempts */}
       {run.attempts && run.attempts.length > 0 && (
@@ -179,22 +181,25 @@ export default function AgentRunDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {run.attempts.map((attempt) => (
+              {run.attempts.map((attempt, index) => (
                 <div key={attempt.id} className="p-4 border rounded-md">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <Badge variant="outline">Attempt #{attempt.attemptNumber}</Badge>
+                      <Badge variant="outline">Attempt #{index + 1}</Badge>
                       <span className="ml-2 text-sm text-muted-foreground">{attempt.id}</span>
                     </div>
                     <Badge>{attempt.status}</Badge>
                   </div>
-                  {attempt.planOutline && (
+                  {attempt.result && (
                     <div className="text-sm mt-2 whitespace-pre-wrap text-muted-foreground">
-                      {attempt.planOutline}
+                      {JSON.stringify(attempt.result, null, 2)}
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground mt-2">
-                    {new Date(attempt.createdAt).toLocaleString('zh-CN')}
+                    开始: {new Date(attempt.startedAt).toLocaleString('zh-CN')}
+                    {attempt.completedAt && (
+                      <> | 完成: {new Date(attempt.completedAt).toLocaleString('zh-CN')}</>
+                    )}
                   </div>
                 </div>
               ))}

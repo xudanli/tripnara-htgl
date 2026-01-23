@@ -1379,6 +1379,73 @@ export interface AnalyzeAbTestResponse {
   recommendation: 'DEPLOY_TREATMENT' | 'KEEP_CONTROL' | 'INCONCLUSIVE';
 }
 
+// ==================== 六-1、模型版本 A/B 测试管理 ====================
+
+// 创建模型版本 A/B 测试请求
+export interface CreateModelAbTestRequest {
+  name: string;
+  description: string;
+  controlVersion: string;
+  treatmentVersion: string;
+  trafficSplit?: {
+    control: number;
+    treatment: number;
+  };
+  successMetrics: string[];
+  minSampleSize?: number;
+  durationDays?: number;
+}
+
+// 创建模型版本 A/B 测试响应
+export interface CreateModelAbTestResponse {
+  experimentId: string;
+  status: string;
+  controlVersion: string;
+  treatmentVersion: string;
+}
+
+// 分析模型版本 A/B 测试请求
+export interface AnalyzeModelAbTestRequest {
+  experimentId: string;
+  controlVersion: string;
+  treatmentVersion: string;
+}
+
+// 指标改进信息
+export interface MetricImprovement {
+  absolute: number;
+  percentage: number;
+}
+
+// 统计显著性
+export interface StatisticalSignificance {
+  pValue: number;
+  significant: boolean;
+}
+
+// 分析模型版本 A/B 测试响应
+export interface AnalyzeModelAbTestResponse {
+  experimentId: string;
+  controlMetrics: Record<string, number>;
+  treatmentMetrics: Record<string, number>;
+  improvement: Record<string, MetricImprovement>;
+  statisticalSignificance: Record<string, StatisticalSignificance>;
+  recommendation: 'PROMOTE' | 'REJECT' | 'CONTINUE';
+  reasoning: string;
+}
+
+// 推广模型版本请求
+export interface PromoteModelVersionRequest {
+  experimentId: string;
+  treatmentVersion: string;
+}
+
+// 推广模型版本响应
+export interface PromoteModelVersionResponse {
+  message: string;
+  productionVersion: string;
+}
+
 // ==================== 七、安全审计 ====================
 
 // 记录审计请求
@@ -3213,4 +3280,227 @@ export interface DecisionStatsTrends {
     end: string;
   };
   [key: string]: unknown;
+}
+
+// ==================== 迭代部署工作流管理 ====================
+
+// 执行迭代部署工作流请求
+export interface ExecuteWorkflowRequest {
+  minScore?: number;
+  minReward?: number;
+  batchSize?: number;
+  modelConfig?: {
+    model_type?: string;
+    provider?: string;
+    [key: string]: unknown;
+  };
+  trainingConfig?: {
+    learning_rate?: number;
+    num_epochs?: number;
+    batch_size?: number;
+    [key: string]: unknown;
+  };
+  autoDeploy?: boolean;
+  [key: string]: unknown;
+}
+
+// 工作流步骤结果
+export interface WorkflowStepResult {
+  step: string;
+  status: 'SUCCESS' | 'FAILED' | 'SKIPPED' | 'RUNNING';
+  result?: Record<string, unknown>;
+  error?: string;
+}
+
+// 执行迭代部署工作流响应
+export interface ExecuteWorkflowResponse {
+  workflowId: string;
+  status: 'RUNNING' | 'SUCCESS' | 'FAILED' | 'BLOCKED';
+  steps: WorkflowStepResult[];
+  modelVersion?: string;
+}
+
+// 获取工作流状态响应
+export interface GetWorkflowStatusResponse {
+  workflowId: string;
+  status: 'RUNNING' | 'SUCCESS' | 'FAILED' | 'BLOCKED';
+  currentStep?: string;
+  steps: Array<{
+    step: string;
+    status: 'SUCCESS' | 'FAILED' | 'SKIPPED' | 'RUNNING';
+  }>;
+}
+
+// ==================== RAG 检索质量评估管理 ====================
+
+// 评估单次检索质量请求
+export interface EvaluateRAGRequest {
+  query: string;
+  params: {
+    query: string;
+    collection?: string;
+    countryCode?: string;
+    tags?: string[];
+    limit?: number;
+    minScore?: number;
+    [key: string]: unknown;
+  };
+  groundTruthDocumentIds: string[];
+}
+
+// 评估单次检索质量响应
+export interface EvaluateRAGResponse {
+  recallAtK: {
+    [k: string]: number;
+  };
+  mrr: number;
+  ndcg: {
+    [k: string]: number;
+  };
+  retrievedIds: string[];
+  scores: number[];
+}
+
+// 批量评估检索质量请求
+export interface EvaluateRAGBatchRequest {
+  testCases: Array<{
+    query: string;
+    params: {
+      query: string;
+      collection?: string;
+      countryCode?: string;
+      limit?: number;
+      [key: string]: unknown;
+    };
+    groundTruthDocumentIds: string[];
+  }>;
+}
+
+// 批量评估检索质量响应
+export interface EvaluateRAGBatchResponse {
+  averageRecallAtK: {
+    [k: string]: number;
+  };
+  averageMRR: number;
+  averageNDCGAtK: {
+    [k: string]: number;
+  };
+  perQueryResults: Array<{
+    query: string;
+    recallAtK: {
+      [k: string]: number;
+    };
+    mrr: number;
+    ndcg: {
+      [k: string]: number;
+    };
+  }>;
+}
+
+// ==================== query-document 对收集管理 ====================
+
+// 收集 query-document 对请求
+export interface CollectQueryPairRequest {
+  query: string;
+  correctDocumentIds: string[];
+  metadata?: {
+    source?: 'USER_QUERY' | 'MANUAL_ANNOTATION' | 'AUTO_ANNOTATION';
+    userId?: string;
+    sessionId?: string;
+    collection?: string;
+    countryCode?: string;
+    tags?: string[];
+    [key: string]: unknown;
+  };
+}
+
+// 收集 query-document 对响应
+export interface CollectQueryPairResponse {
+  pairId: string;
+  message: string;
+}
+
+// 从用户查询自动收集请求
+export interface CollectQueryPairFromQueryRequest {
+  query: string;
+  retrievedResults: Array<{
+    id: string;
+    score: number;
+  }>;
+  userFeedback?: {
+    clickedDocumentIds?: string[];
+    relevantDocumentIds?: string[];
+    irrelevantDocumentIds?: string[];
+  };
+}
+
+// 从用户查询自动收集响应
+export interface CollectQueryPairFromQueryResponse {
+  pairId: string;
+  correctDocumentIds: string[];
+  message: string;
+}
+
+// 批量收集 query-document 对请求
+export interface CollectQueryPairBatchRequest {
+  pairs: Array<{
+    query: string;
+    correctDocumentIds: string[];
+    metadata?: {
+      source?: 'USER_QUERY' | 'MANUAL_ANNOTATION' | 'AUTO_ANNOTATION';
+      collection?: string;
+      [key: string]: unknown;
+    };
+  }>;
+}
+
+// 批量收集 query-document 对响应
+export interface CollectQueryPairBatchResponse {
+  pairIds: string[];
+  successCount: number;
+  totalCount: number;
+}
+
+// Query-Document 对
+export interface QueryPair {
+  id: string;
+  query: string;
+  correctDocumentIds: string[];
+  metadata?: {
+    source?: 'USER_QUERY' | 'MANUAL_ANNOTATION' | 'AUTO_ANNOTATION';
+    collection?: string;
+    countryCode?: string;
+    timestamp?: string;
+    [key: string]: unknown;
+  };
+}
+
+// 获取 query-document 对参数
+export interface GetQueryPairsParams {
+  source?: 'USER_QUERY' | 'MANUAL_ANNOTATION' | 'AUTO_ANNOTATION';
+  collection?: string;
+  countryCode?: string;
+  limit?: number;
+}
+
+// 获取 query-document 对响应
+export interface GetQueryPairsResponse {
+  pairs: QueryPair[];
+  total: number;
+}
+
+// 导出为评估数据集格式请求
+export interface ExportQueryPairsForEvaluationRequest {
+  pairs: Array<{
+    query: string;
+    correctDocumentIds: string[];
+  }>;
+}
+
+// 导出为评估数据集格式响应
+export interface ExportQueryPairsForEvaluationResponse {
+  evaluationDataset: Array<{
+    query: string;
+    ground_truth_document_ids: string[];
+  }>;
 }
