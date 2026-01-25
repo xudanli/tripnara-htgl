@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { GetWorkflowStatusResponse, ApiResponse } from '@/types/api';
+import { proxyGetToBackend } from '@/lib/backend-client';
 
 /**
  * GET /api/training/workflows/:workflowId
  * 获取工作流状态
+ * 代理请求到真实后端服务
  */
 export async function GET(
   request: NextRequest,
@@ -12,36 +13,14 @@ export async function GET(
   try {
     const { workflowId } = params;
 
-    // TODO: 实现实际的工作流状态查询逻辑
-    // 这里应该从数据库或缓存中查询工作流状态
-    
-    // 模拟工作流状态
-    const response: ApiResponse<GetWorkflowStatusResponse> = {
-      success: true,
-      data: {
-        workflowId,
-        status: 'RUNNING',
-        currentStep: 'start_training',
-        steps: [
-          {
-            step: 'prepare_training_data',
-            status: 'SUCCESS' as const,
-          },
-          {
-            step: 'create_training_job',
-            status: 'SUCCESS' as const,
-          },
-          {
-            step: 'start_training',
-            status: 'RUNNING' as const,
-          },
-        ],
-      },
-    };
+    // 代理请求到后端服务
+    const backendResponse = await proxyGetToBackend(`/training/workflows/${workflowId}`);
+    const data = await backendResponse.json();
 
-    return NextResponse.json(response);
+    // 返回后端服务的响应
+    return NextResponse.json(data, { status: backendResponse.status });
   } catch (error) {
-    const errorResponse: ApiResponse<never> = {
+    const errorResponse = {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',

@@ -51,6 +51,48 @@ import {
   collectQueryPairBatch,
   getQueryPairs,
   exportQueryPairsForEvaluation,
+  // 新接口
+  retrieveChunks,
+  searchRAG,
+  retrieveRAG,
+  rebuildKnowledgeBaseIndex,
+  clearKnowledgeBaseIndex,
+  generateRouteNarrative,
+  extractRailPassRules,
+  extractTrailAccessRules,
+  extractComplianceRules,
+  getLocalInsight,
+  answerRouteQuestion,
+  explainWhyNotOtherRoute,
+  getDestinationInsights,
+  // 评估与测试集
+  evaluateChunkRetrieval,
+  evaluateChunkRetrievalBatch,
+  getEvaluationTestset,
+  saveEvaluationTestset,
+  runEvaluationTestset,
+  findChunksForTestset,
+  listChunksForTestset,
+  // 监控指标
+  getRAGMonitoringMetrics,
+  getRAGPerformanceMetrics,
+  getRAGQualityMetrics,
+  getRAGCostMetrics,
+  resetRAGMonitoringMetrics,
+  // 缓存管理
+  getRAGCacheStats,
+  resetRAGCacheStats,
+  clearRAGCache,
+  // 新接口
+  ragRetrieveWithFallback,
+  ragChat,
+  gateEvaluate,
+  getRAGPrometheusMetrics,
+  getRAGMetricsStats,
+  ragToolWeather,
+  ragToolPlaces,
+  ragToolBrowse,
+  runRAGEvaluationTestset,
 } from '@/services/rag-llm';
 import type {
   RAGStatsResponse,
@@ -93,31 +135,23 @@ import {
   CheckCircle,
   FileCheck,
   Download,
+  Database,
+  MessageSquare,
+  MapPin,
+  Sparkles,
+  Activity,
+  TrendingUp,
+  DollarSign,
+  HardDrive,
+  Tag,
+  Cloud,
+  Globe,
+  Wrench,
+  Gauge,
+  ShieldCheck,
 } from 'lucide-react';
 
 export default function RAGPage() {
-  // 统计
-  const [stats, setStats] = useState<RAGStatsResponse | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
-  const [statsCollection, setStatsCollection] = useState('');
-
-  // 获取统计
-  async function handleGetStats() {
-    setStatsLoading(true);
-    try {
-      const collection = statsCollection && statsCollection !== 'all' ? statsCollection : undefined;
-      const result = await getRAGStats(collection);
-      if (result) {
-        setStats(result);
-      }
-    } catch (error) {
-      console.error('获取统计失败:', error);
-      alert('获取统计失败: ' + (error instanceof Error ? error.message : '未知错误'));
-    } finally {
-      setStatsLoading(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -125,237 +159,62 @@ export default function RAGPage() {
         <p className="text-muted-foreground mt-2">管理 RAG 知识库和搜索</p>
       </div>
 
-      <Tabs defaultValue="stats" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-7">
-          <TabsTrigger value="stats">
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="overview">
             <BarChart3 className="mr-2 h-4 w-4" />
-            统计
+            概览
           </TabsTrigger>
-          <TabsTrigger value="documents">
+          <TabsTrigger value="knowledge-base">
+            <Database className="mr-2 h-4 w-4" />
+            知识库
+          </TabsTrigger>
+          <TabsTrigger value="content">
             <FileText className="mr-2 h-4 w-4" />
-            文档管理
+            内容管理
           </TabsTrigger>
-          <TabsTrigger value="index">
-            <Upload className="mr-2 h-4 w-4" />
-            索引
-          </TabsTrigger>
-          <TabsTrigger value="compliance">
-            <Shield className="mr-2 h-4 w-4" />
-            合规规则
-          </TabsTrigger>
-          <TabsTrigger value="narrative">
-            <BookOpen className="mr-2 h-4 w-4" />
-            叙事生成
-          </TabsTrigger>
-          <TabsTrigger value="evaluation">
+          <TabsTrigger value="testing">
             <CheckCircle className="mr-2 h-4 w-4" />
-            评估
+            测试评估
           </TabsTrigger>
-          <TabsTrigger value="query-pairs">
-            <FileCheck className="mr-2 h-4 w-4" />
-            Query-Pairs
+          <TabsTrigger value="monitoring">
+            <Activity className="mr-2 h-4 w-4" />
+            监控优化
+          </TabsTrigger>
+          <TabsTrigger value="advanced">
+            <Sparkles className="mr-2 h-4 w-4" />
+            高级功能
           </TabsTrigger>
         </TabsList>
 
-        {/* 文档管理 */}
-        <TabsContent value="documents" className="space-y-4">
-          <DocumentsManagementTab />
+        {/* 概览 */}
+        <TabsContent value="overview" className="space-y-4">
+          <OverviewTab />
         </TabsContent>
 
-        {/* 统计 */}
-        <TabsContent value="stats" className="space-y-4">
-          {/* 查询控制 */}
-          <Card>
-            <CardHeader>
-              <CardTitle>统计查询</CardTitle>
-              <CardDescription>选择集合查看统计信息</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <Label htmlFor="statsCollection">集合（可选）</Label>
-                  <Select
-                    value={statsCollection}
-                    onValueChange={setStatsCollection}
-                  >
-                    <SelectTrigger id="statsCollection">
-                      <SelectValue placeholder="全部集合" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">全部集合</SelectItem>
-                      <SelectItem value="travel_guides">travel_guides</SelectItem>
-                      <SelectItem value="compliance_rules">compliance_rules</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  <Button onClick={handleGetStats} disabled={statsLoading}>
-                    {statsLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        加载中...
-                      </>
-                    ) : (
-                      <>
-                        <BarChart3 className="mr-2 h-4 w-4" />
-                        获取统计
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {stats && (
-            <div className="space-y-4">
-              {/* 总体统计卡片 */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">总文档数</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold">{stats.totalDocuments}</div>
-                    <div className="text-xs text-muted-foreground mt-1">知识库文档总数</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">集合数量</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold">{stats.collections?.length || 0}</div>
-                    <div className="text-xs text-muted-foreground mt-1">已创建的集合</div>
-                  </CardContent>
-                </Card>
-                {stats.byCollection && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">当前集合文档数</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-3xl font-bold">{stats.byCollection.count}</div>
-                      <div className="text-xs text-muted-foreground mt-1">{stats.byCollection.name}</div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-
-              {/* 集合统计详情 */}
-              {stats.collections && stats.collections.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>集合统计详情</CardTitle>
-                    <CardDescription>各集合的文档分布和标签信息</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {stats.collections.map((collection, idx) => (
-                        <div key={idx} className="p-4 border rounded-lg space-y-3">
-                          <div className="flex items-start justify-between">
-                            <h3 className="font-semibold text-lg">{collection.name}</h3>
-                            <Badge variant="default" className="text-sm">{collection.count} 文档</Badge>
-                          </div>
-                          {collection.countries && collection.countries.length > 0 && (
-                            <div className="space-y-1">
-                              <div className="text-xs font-medium text-muted-foreground">国家/地区</div>
-                              <div className="flex flex-wrap gap-1">
-                                {collection.countries.map((country, i) => (
-                                  <Badge key={i} variant="outline" className="text-xs">
-                                    {country}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {collection.tags && collection.tags.length > 0 && (
-                            <div className="space-y-1">
-                              <div className="text-xs font-medium text-muted-foreground">标签</div>
-                              <div className="flex flex-wrap gap-1">
-                                {collection.tags.map((tag, i) => (
-                                  <Badge key={i} variant="secondary" className="text-xs">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* 指定集合详情 */}
-              {stats.byCollection && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>指定集合详情</CardTitle>
-                    <CardDescription>当前查询集合的详细信息</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="p-4 border rounded-lg space-y-3">
-                      <div className="flex items-start justify-between">
-                        <h3 className="font-semibold text-lg">{stats.byCollection.name}</h3>
-                        <Badge variant="default" className="text-sm">{stats.byCollection.count} 文档</Badge>
-                      </div>
-                      {stats.byCollection.countries && stats.byCollection.countries.length > 0 && (
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-muted-foreground">国家/地区</div>
-                          <div className="flex flex-wrap gap-1">
-                            {stats.byCollection.countries.map((country, i) => (
-                              <Badge key={i} variant="outline" className="text-xs">
-                                {country}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {stats.byCollection.tags && stats.byCollection.tags.length > 0 && (
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-muted-foreground">标签</div>
-                          <div className="flex flex-wrap gap-1">
-                            {stats.byCollection.tags.map((tag, i) => (
-                              <Badge key={i} variant="secondary" className="text-xs">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
+        {/* 知识库管理 */}
+        <TabsContent value="knowledge-base" className="space-y-4">
+          <KnowledgeBaseManagementTab />
         </TabsContent>
 
-        {/* 文档索引 */}
-        <TabsContent value="index" className="space-y-4">
-          <DocumentIndexTab />
+        {/* 内容管理 */}
+        <TabsContent value="content" className="space-y-4">
+          <ContentManagementTab />
         </TabsContent>
 
-        {/* 合规规则 */}
-        <TabsContent value="compliance" className="space-y-4">
-          <ComplianceRulesTab />
+        {/* 测试评估 */}
+        <TabsContent value="testing" className="space-y-4">
+          <TestingEvaluationTab />
         </TabsContent>
 
-        {/* 叙事生成 */}
-        <TabsContent value="narrative" className="space-y-4">
-          <NarrativeGenerationTab />
+        {/* 监控优化 */}
+        <TabsContent value="monitoring" className="space-y-4">
+          <MonitoringOptimizationTab />
         </TabsContent>
 
-        {/* RAG 评估 */}
-        <TabsContent value="evaluation" className="space-y-4">
-          <RAGEvaluationTab />
-        </TabsContent>
-
-        {/* Query-Pairs 收集 */}
-        <TabsContent value="query-pairs" className="space-y-4">
-          <QueryPairsTab />
+        {/* 高级功能 */}
+        <TabsContent value="advanced" className="space-y-4">
+          <AdvancedFeaturesTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -487,17 +346,35 @@ function DocumentsManagementTab() {
   }, []);
 
   return (
-    <div className="grid grid-cols-3 gap-4">
-      {/* 左侧：文档列表 (2/3) */}
-      <div className="col-span-2 space-y-4">
-        {/* 筛选条件 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>文档列表</CardTitle>
-            <CardDescription>查看和管理 RAG 知识库中的文档</CardDescription>
-          </CardHeader>
+    <div className="space-y-6">
+      {/* 筛选条件 */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center">
+                <FileText className="mr-2 h-5 w-5" />
+                文档管理
+              </CardTitle>
+              <CardDescription>查看和管理 RAG 知识库中的文档</CardDescription>
+            </div>
+            <Button onClick={loadDocuments} disabled={loading} variant="outline" size="sm">
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  刷新中...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  刷新
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="filterCollection">集合</Label>
                 <Select
@@ -568,99 +445,104 @@ function DocumentsManagementTab() {
                 </div>
               </div>
             </div>
-            <Button onClick={loadDocuments} disabled={loading} className="w-full">
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  加载中...
-                </>
-              ) : (
-                <>
-                  <Search className="mr-2 h-4 w-4" />
-                  搜索
-                </>
-              )}
-            </Button>
           </CardContent>
         </Card>
 
         {/* 文档列表 */}
-        {loading && documents.length === 0 ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : documents.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              暂无文档
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {documents.map((doc) => (
-              <Card 
-                key={doc.id} 
-                className={`cursor-pointer transition-colors ${selectedDocument?.id === doc.id ? 'ring-2 ring-primary' : ''}`}
-                onClick={() => loadDocumentDetail(doc.id)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 space-y-2 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-base truncate">{doc.title || '无标题'}</h3>
-                        <Badge variant="outline" className="text-xs">{doc.collection}</Badge>
-                        {doc.countryCode && (
-                          <Badge variant="secondary" className="text-xs">{doc.countryCode}</Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {doc.contentPreview || doc.content.substring(0, 150)}
-                      </p>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                        {doc.source && <span>来源: {doc.source}</span>}
-                        {doc.tags && doc.tags.length > 0 && (
-                          <span>标签: {doc.tags.slice(0, 3).join(', ')}{doc.tags.length > 3 ? '...' : ''}</span>
-                        )}
-                        <span>创建: {new Date(doc.createdAt).toLocaleDateString('zh-CN')}</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 ml-3 flex-shrink-0">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          loadDocumentDetail(doc.id);
-                        }}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteDocument(doc.id);
-                        }}
-                        disabled={deleteLoading === doc.id}
-                      >
-                        {deleteLoading === doc.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>文档列表</CardTitle>
+              {pagination && (
+                <Badge variant="outline">
+                  共 {pagination.total} 条文档
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
 
-            {/* 分页 */}
-            {pagination && pagination.totalPages > 1 && (
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
+            {loading && documents.length === 0 ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : documents.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>暂无文档</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {documents.map((doc) => (
+                  <Card 
+                    key={doc.id} 
+                    className={`cursor-pointer transition-all hover:shadow-md ${selectedDocument?.id === doc.id ? 'ring-2 ring-primary shadow-md' : ''}`}
+                    onClick={() => loadDocumentDetail(doc.id)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold text-base truncate">{doc.title || '无标题'}</h3>
+                            <Badge variant="outline" className="text-xs">{doc.collection}</Badge>
+                            {doc.countryCode && (
+                              <Badge variant="secondary" className="text-xs">{doc.countryCode}</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {doc.contentPreview || doc.content.substring(0, 150)}
+                          </p>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                            {doc.source && (
+                              <span className="flex items-center gap-1">
+                                <FileText className="h-3 w-3" />
+                                来源: {doc.source}
+                              </span>
+                            )}
+                            {doc.tags && doc.tags.length > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Tag className="h-3 w-3" />
+                                标签: {doc.tags.slice(0, 3).join(', ')}{doc.tags.length > 3 ? '...' : ''}
+                              </span>
+                            )}
+                            <span>创建: {new Date(doc.createdAt).toLocaleDateString('zh-CN')}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              loadDocumentDetail(doc.id);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteDocument(doc.id);
+                            }}
+                            disabled={deleteLoading === doc.id}
+                          >
+                            {deleteLoading === doc.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+
+                {/* 分页 */}
+                {pagination && pagination.totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-4 border-t">
                     <div className="text-sm text-muted-foreground">
                       共 {pagination.total} 条，第 {pagination.page} / {pagination.totalPages} 页
                     </div>
@@ -695,125 +577,112 @@ function DocumentsManagementTab() {
                       </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* 右侧：编辑表单 (1/3) */}
-      <div className="col-span-1">
-        <Card className="sticky top-4">
-          <CardHeader>
-            <CardTitle>编辑文档</CardTitle>
-            <CardDescription>
-              {selectedDocument ? `文档 ID: ${selectedDocument.id}` : '选择左侧文档进行编辑'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {selectedDocument ? (
-              <>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="editTitle">标题</Label>
-                    <Input
-                      id="editTitle"
-                      value={editForm.title || ''}
-                      onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                      className="h-9"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editCollection">集合</Label>
-                    <Select
-                      value={editForm.collection || ''}
-                      onValueChange={(value) => setEditForm({ ...editForm, collection: value })}
-                    >
-                      <SelectTrigger id="editCollection" className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="travel_guides">travel_guides</SelectItem>
-                        <SelectItem value="compliance_rules">compliance_rules</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label htmlFor="editCountryCode">国家代码</Label>
-                      <Input
-                        id="editCountryCode"
-                        value={editForm.countryCode || ''}
-                        onChange={(e) => setEditForm({ ...editForm, countryCode: e.target.value })}
-                        placeholder="IS"
-                        className="h-9"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="editSource">来源</Label>
-                      <Input
-                        id="editSource"
-                        value={editForm.source || ''}
-                        onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
-                        className="h-9"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="editTags">标签（逗号分隔）</Label>
-                    <Input
-                      id="editTags"
-                      value={editForm.tags?.join(',') || ''}
-                      onChange={(e) =>
-                        setEditForm({
-                          ...editForm,
-                          tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean),
-                        })
-                      }
-                      placeholder="attractions, tips..."
-                      className="h-9"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editContent">内容 *</Label>
-                    <Textarea
-                      id="editContent"
-                      value={editForm.content || ''}
-                      onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
-                      rows={8}
-                      placeholder="文档内容..."
-                      className="text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      字符数: {editForm.content?.length || 0}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button variant="outline" onClick={handleCloseDialog} className="flex-1" size="sm">
-                    取消
-                  </Button>
-                  <Button onClick={handleUpdateDocument} disabled={editLoading} className="flex-1" size="sm">
-                    {editLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        保存中...
-                      </>
-                    ) : (
-                      '保存'
-                    )}
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                请从左侧列表选择文档进行编辑
+                )}
               </div>
             )}
           </CardContent>
         </Card>
-      </div>
+
+      {/* 编辑对话框 */}
+      <Dialog open={!!selectedDocument} onOpenChange={(open) => !open && handleCloseDialog()}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>编辑文档</DialogTitle>
+            <DialogDescription>
+              {selectedDocument ? `文档 ID: ${selectedDocument.id}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedDocument && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="editTitle">标题</Label>
+                <Input
+                  id="editTitle"
+                  value={editForm.title || ''}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="editCollection">集合</Label>
+                <Select
+                  value={editForm.collection || ''}
+                  onValueChange={(value) => setEditForm({ ...editForm, collection: value })}
+                >
+                  <SelectTrigger id="editCollection">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="travel_guides">travel_guides</SelectItem>
+                    <SelectItem value="compliance_rules">compliance_rules</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="editCountryCode">国家代码</Label>
+                  <Input
+                    id="editCountryCode"
+                    value={editForm.countryCode || ''}
+                    onChange={(e) => setEditForm({ ...editForm, countryCode: e.target.value })}
+                    placeholder="IS"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="editSource">来源</Label>
+                  <Input
+                    id="editSource"
+                    value={editForm.source || ''}
+                    onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="editTags">标签（逗号分隔）</Label>
+                <Input
+                  id="editTags"
+                  value={editForm.tags?.join(',') || ''}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean),
+                    })
+                  }
+                  placeholder="attractions, tips..."
+                />
+              </div>
+              <div>
+                <Label htmlFor="editContent">内容 *</Label>
+                <Textarea
+                  id="editContent"
+                  value={editForm.content || ''}
+                  onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
+                  rows={12}
+                  placeholder="文档内容..."
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  字符数: {editForm.content?.length || 0}
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseDialog}>
+              取消
+            </Button>
+            <Button onClick={handleUpdateDocument} disabled={editLoading}>
+              {editLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                '保存'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1176,6 +1045,26 @@ function ComplianceRulesTab() {
               <div className="text-sm text-green-800">{refreshResult}</div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>提取 Rail Pass 规则</CardTitle>
+          <CardDescription>从知识库中提取指定 Rail Pass 类型的规则</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <RailPassExtractForm />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>提取 Trail Access 规则</CardTitle>
+          <CardDescription>从知识库中提取指定路线的准入规则</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <TrailAccessExtractForm />
         </CardContent>
       </Card>
 
@@ -2434,6 +2323,16 @@ function NarrativeGenerationTab() {
 
         <Card>
           <CardHeader>
+            <CardTitle>生成路线叙事</CardTitle>
+            <CardDescription>为指定路线方向生成完整叙事内容</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <RouteNarrativeForm />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>生成路线段叙事</CardTitle>
             <CardDescription>为指定路线段生成叙事内容</CardDescription>
           </CardHeader>
@@ -2597,6 +2496,2714 @@ function NarrativeGenerationTab() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+// 知识库管理标签页组件
+function KnowledgeBaseTab() {
+  const [rebuildLoading, setRebuildLoading] = useState(false);
+  const [clearLoading, setClearLoading] = useState(false);
+  const [rebuildResult, setRebuildResult] = useState<string | null>(null);
+  const [clearResult, setClearResult] = useState<string | null>(null);
+
+  async function handleRebuildIndex() {
+    setRebuildLoading(true);
+    setRebuildResult(null);
+    try {
+      const result = await rebuildKnowledgeBaseIndex();
+      if (result) {
+        setRebuildResult('知识库索引重建任务已启动，预计需要 10-20 分钟完成');
+      } else {
+        setRebuildResult('重建失败，请查看控制台错误信息');
+      }
+    } catch (error) {
+      setRebuildResult(`错误: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setRebuildLoading(false);
+    }
+  }
+
+  async function handleClearIndex() {
+    if (!confirm('警告：此操作将删除所有知识库数据！确定要继续吗？')) {
+      return;
+    }
+    setClearLoading(true);
+    setClearResult(null);
+    try {
+      const result = await clearKnowledgeBaseIndex();
+      if (result) {
+        setClearResult('知识库索引已清空');
+      } else {
+        setClearResult('清空失败，请查看控制台错误信息');
+      }
+    } catch (error) {
+      setClearResult(`错误: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setClearLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>知识库索引管理</CardTitle>
+          <CardDescription>管理 RAG 知识库的索引，包括重建和清空操作</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">重建索引</CardTitle>
+                <CardDescription>完整重建知识库索引，清空并重新索引所有文件</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-sm text-muted-foreground">
+                  <p>• 清空现有索引</p>
+                  <p>• 扫描 KB_PATH 目录（默认: ./docs/iceland）</p>
+                  <p>• 为每个 JSON 文件生成 embedding</p>
+                  <p>• 存储到 knowledge_files 和 chunks 表</p>
+                  <p className="mt-2 font-medium">执行时间: 约 10-20 分钟（23 个文件）</p>
+                </div>
+                <Button onClick={handleRebuildIndex} disabled={rebuildLoading} className="w-full">
+                  {rebuildLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      重建中...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      重建索引
+                    </>
+                  )}
+                </Button>
+                {rebuildResult && (
+                  <div className={`p-3 rounded-lg text-sm ${rebuildResult.includes('失败') || rebuildResult.includes('错误') ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
+                    {rebuildResult}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-destructive">
+              <CardHeader>
+                <CardTitle className="text-lg text-destructive">清空索引</CardTitle>
+                <CardDescription>删除所有知识库数据（危险操作）</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-sm text-muted-foreground">
+                  <p className="text-destructive font-medium">⚠️ 警告：此操作将删除所有知识库数据！</p>
+                  <p className="mt-2">• 删除所有 knowledge_files 记录</p>
+                  <p>• 删除所有 chunks 记录</p>
+                  <p>• 删除所有 embedding 向量</p>
+                </div>
+                <Button onClick={handleClearIndex} disabled={clearLoading} variant="destructive" className="w-full">
+                  {clearLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      清空中...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      清空索引
+                    </>
+                  )}
+                </Button>
+                {clearResult && (
+                  <div className={`p-3 rounded-lg text-sm ${clearResult.includes('失败') || clearResult.includes('错误') ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
+                    {clearResult}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// 检索测试标签页组件
+function RetrieveTestTab() {
+  const [retrieveType, setRetrieveType] = useState<'chunks' | 'search' | 'retrieve'>('chunks');
+  const [query, setQuery] = useState('');
+  const [limit, setLimit] = useState(5);
+  const [credibilityMin, setCredibilityMin] = useState(0.5);
+  const [collection, setCollection] = useState('');
+  const [countryCode, setCountryCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleRetrieve() {
+    if (!query.trim()) {
+      setError('请输入查询文本');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setResults([]);
+    try {
+      let result: any = null;
+      if (retrieveType === 'chunks') {
+        result = await retrieveChunks({
+          query,
+          limit,
+          credibilityMin,
+        });
+      } else if (retrieveType === 'search') {
+        result = await searchRAG({
+          query,
+          collection: collection || undefined,
+          countryCode: countryCode || undefined,
+          limit,
+        });
+      } else {
+        result = await retrieveRAG({
+          query,
+          collection: collection || 'travel_guides',
+          countryCode: countryCode || undefined,
+          limit,
+        });
+      }
+      if (result) {
+        setResults(Array.isArray(result) ? result : result.data || []);
+      } else {
+        setError('检索失败，请查看控制台错误信息');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>检索测试</CardTitle>
+          <CardDescription>测试 RAG 检索接口，支持新的 Chunk 检索和传统检索</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>检索类型</Label>
+            <Select value={retrieveType} onValueChange={(v: any) => setRetrieveType(v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="chunks">Chunk 检索（新，推荐）⭐</SelectItem>
+                <SelectItem value="search">RAG 搜索</SelectItem>
+                <SelectItem value="retrieve">传统检索（旧）</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="retrieveQuery">查询文本 *</Label>
+            <Input
+              id="retrieveQuery"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="例如：冰岛租车保险"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="retrieveLimit">返回数量</Label>
+              <Input
+                id="retrieveLimit"
+                type="number"
+                value={limit}
+                onChange={(e) => setLimit(parseInt(e.target.value) || 5)}
+                min={1}
+                max={50}
+              />
+            </div>
+            {retrieveType === 'chunks' && (
+              <div>
+                <Label htmlFor="credibilityMin">最小可信度</Label>
+                <Input
+                  id="credibilityMin"
+                  type="number"
+                  step="0.1"
+                  value={credibilityMin}
+                  onChange={(e) => setCredibilityMin(parseFloat(e.target.value) || 0.5)}
+                  min={0}
+                  max={1}
+                />
+              </div>
+            )}
+          </div>
+
+          {(retrieveType === 'search' || retrieveType === 'retrieve') && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="retrieveCollection">集合</Label>
+                <Input
+                  id="retrieveCollection"
+                  value={collection}
+                  onChange={(e) => setCollection(e.target.value)}
+                  placeholder="travel_guides"
+                />
+              </div>
+              <div>
+                <Label htmlFor="retrieveCountryCode">国家代码</Label>
+                <Input
+                  id="retrieveCountryCode"
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  placeholder="IS"
+                />
+              </div>
+            </div>
+          )}
+
+          <Button onClick={handleRetrieve} disabled={loading} className="w-full">
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                检索中...
+              </>
+            ) : (
+              <>
+                <Search className="mr-2 h-4 w-4" />
+                开始检索
+              </>
+            )}
+          </Button>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              {error}
+            </div>
+          )}
+
+          {results.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-sm font-medium">检索结果 ({results.length} 条)</div>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {results.map((item, idx) => (
+                  <Card key={idx}>
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        {item.title && <div className="font-medium">{item.title}</div>}
+                        {item.content && (
+                          <div className="text-sm text-muted-foreground line-clamp-3">
+                            {typeof item.content === 'string' ? item.content : JSON.stringify(item.content)}
+                          </div>
+                        )}
+                        {item.similarity !== undefined && (
+                          <Badge variant="outline">相似度: {(item.similarity * 100).toFixed(2)}%</Badge>
+                        )}
+                        {item.credibilityScore !== undefined && (
+                          <Badge variant="outline">可信度: {(item.credibilityScore * 100).toFixed(2)}%</Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// 增强对话标签页组件
+function ChatTab() {
+  const [chatType, setChatType] = useState<'answer' | 'explain' | 'destination'>('answer');
+  const [question, setQuestion] = useState('');
+  const [routeDirectionId, setRouteDirectionId] = useState('');
+  const [selectedRouteId, setSelectedRouteId] = useState('');
+  const [alternativeRouteId, setAlternativeRouteId] = useState('');
+  const [placeId, setPlaceId] = useState('');
+  const [countryCode, setCountryCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleChat() {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      let response: any = null;
+      if (chatType === 'answer') {
+        if (!question.trim()) {
+          setError('请输入问题');
+          return;
+        }
+        response = await answerRouteQuestion({
+          question,
+          routeDirectionId: routeDirectionId || undefined,
+          countryCode: countryCode || undefined,
+        });
+      } else if (chatType === 'explain') {
+        if (!selectedRouteId || !alternativeRouteId) {
+          setError('请填写路线 ID');
+          return;
+        }
+        response = await explainWhyNotOtherRoute({
+          selectedRouteId,
+          alternativeRouteId,
+          countryCode: countryCode || undefined,
+        });
+      } else {
+        if (!placeId.trim()) {
+          setError('请输入地点 ID');
+          return;
+        }
+        response = await getDestinationInsights({
+          placeId,
+          countryCode: countryCode || undefined,
+        });
+      }
+      if (response) {
+        setResult(response);
+      } else {
+        setError('请求失败，请查看控制台错误信息');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>增强对话</CardTitle>
+          <CardDescription>使用 RAG 增强的对话功能，回答路线问题、解释路线选择、获取目的地信息</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>对话类型</Label>
+            <Select value={chatType} onValueChange={(v: any) => setChatType(v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="answer">回答路线问题</SelectItem>
+                <SelectItem value="explain">解释路线选择</SelectItem>
+                <SelectItem value="destination">目的地深度信息</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {chatType === 'answer' && (
+            <>
+              <div>
+                <Label htmlFor="chatQuestion">问题 *</Label>
+                <Textarea
+                  id="chatQuestion"
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  placeholder="例如：黄金圈适合冬天去吗？"
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="chatRouteDirectionId">路线方向 ID</Label>
+                  <Input
+                    id="chatRouteDirectionId"
+                    value={routeDirectionId}
+                    onChange={(e) => setRouteDirectionId(e.target.value)}
+                    placeholder="route_001"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="chatCountryCode">国家代码</Label>
+                  <Input
+                    id="chatCountryCode"
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    placeholder="IS"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {chatType === 'explain' && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="selectedRouteId">已选路线 ID *</Label>
+                  <Input
+                    id="selectedRouteId"
+                    value={selectedRouteId}
+                    onChange={(e) => setSelectedRouteId(e.target.value)}
+                    placeholder="route_001"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="alternativeRouteId">备选路线 ID *</Label>
+                  <Input
+                    id="alternativeRouteId"
+                    value={alternativeRouteId}
+                    onChange={(e) => setAlternativeRouteId(e.target.value)}
+                    placeholder="route_002"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="explainCountryCode">国家代码</Label>
+                <Input
+                  id="explainCountryCode"
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  placeholder="IS"
+                />
+              </div>
+            </>
+          )}
+
+          {chatType === 'destination' && (
+            <>
+              <div>
+                <Label htmlFor="placeId">地点 ID *</Label>
+                <Input
+                  id="placeId"
+                  value={placeId}
+                  onChange={(e) => setPlaceId(e.target.value)}
+                  placeholder="reykjavik"
+                />
+              </div>
+              <div>
+                <Label htmlFor="destCountryCode">国家代码</Label>
+                <Input
+                  id="destCountryCode"
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  placeholder="IS"
+                />
+              </div>
+            </>
+          )}
+
+          <Button onClick={handleChat} disabled={loading} className="w-full">
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                处理中...
+              </>
+            ) : (
+              <>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                发送请求
+              </>
+            )}
+          </Button>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              {error}
+            </div>
+          )}
+
+          {result && (
+            <Card>
+              <CardHeader>
+                <CardTitle>响应结果</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="text-sm overflow-auto max-h-96 bg-muted p-4 rounded-lg">
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              </CardContent>
+            </Card>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Rail Pass 规则提取表单组件
+function RailPassExtractForm() {
+  const [passType, setPassType] = useState('');
+  const [countryCode, setCountryCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleExtract() {
+    if (!passType.trim()) {
+      setError('请输入 Pass 类型');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const response = await extractRailPassRules({
+        passType,
+        countryCode: countryCode || undefined,
+      });
+      if (response) {
+        setResult(response);
+      } else {
+        setError('提取失败，请查看控制台错误信息');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="railPassType">Pass 类型 *</Label>
+          <Input
+            id="railPassType"
+            value={passType}
+            onChange={(e) => setPassType(e.target.value)}
+            placeholder="Eurail Global Pass"
+          />
+        </div>
+        <div>
+          <Label htmlFor="railPassCountryCode">国家代码</Label>
+          <Input
+            id="railPassCountryCode"
+            value={countryCode}
+            onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
+            placeholder="IS"
+            maxLength={2}
+          />
+        </div>
+      </div>
+      <Button onClick={handleExtract} disabled={loading} className="w-full">
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            提取中...
+          </>
+        ) : (
+          <>
+            <Shield className="mr-2 h-4 w-4" />
+            提取规则
+          </>
+        )}
+      </Button>
+      {error && (
+        <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          {error}
+        </div>
+      )}
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle>提取结果</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-sm overflow-auto max-h-96 bg-muted p-4 rounded-lg">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// Trail Access 规则提取表单组件
+function TrailAccessExtractForm() {
+  const [trailId, setTrailId] = useState('');
+  const [countryCode, setCountryCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleExtract() {
+    if (!trailId.trim()) {
+      setError('请输入路线 ID');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const response = await extractTrailAccessRules({
+        trailId,
+        countryCode: countryCode || undefined,
+      });
+      if (response) {
+        setResult(response);
+      } else {
+        setError('提取失败，请查看控制台错误信息');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="trailId">路线 ID *</Label>
+          <Input
+            id="trailId"
+            value={trailId}
+            onChange={(e) => setTrailId(e.target.value)}
+            placeholder="laugavegur"
+          />
+        </div>
+        <div>
+          <Label htmlFor="trailAccessCountryCode">国家代码</Label>
+          <Input
+            id="trailAccessCountryCode"
+            value={countryCode}
+            onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
+            placeholder="IS"
+            maxLength={2}
+          />
+        </div>
+      </div>
+      <Button onClick={handleExtract} disabled={loading} className="w-full">
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            提取中...
+          </>
+        ) : (
+          <>
+            <Shield className="mr-2 h-4 w-4" />
+            提取规则
+          </>
+        )}
+      </Button>
+      {error && (
+        <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          {error}
+        </div>
+      )}
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle>提取结果</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-sm overflow-auto max-h-96 bg-muted p-4 rounded-lg">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// 路线叙事表单组件
+function RouteNarrativeForm() {
+  const [routeDirectionId, setRouteDirectionId] = useState('');
+  const [countryCode, setCountryCode] = useState('');
+  const [includeLocalInsights, setIncludeLocalInsights] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleGenerate() {
+    if (!routeDirectionId.trim()) {
+      setError('请输入路线方向 ID');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const response = await generateRouteNarrative(routeDirectionId, {
+        countryCode: countryCode || undefined,
+        includeLocalInsights,
+      });
+      if (response) {
+        setResult(response);
+      } else {
+        setError('生成失败，请查看控制台错误信息');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="routeDirectionId">路线方向 ID *</Label>
+          <Input
+            id="routeDirectionId"
+            value={routeDirectionId}
+            onChange={(e) => setRouteDirectionId(e.target.value)}
+            placeholder="route_001"
+          />
+        </div>
+        <div>
+          <Label htmlFor="routeNarrativeCountryCode">国家代码</Label>
+          <Input
+            id="routeNarrativeCountryCode"
+            value={countryCode}
+            onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
+            placeholder="IS"
+            maxLength={2}
+          />
+        </div>
+      </div>
+      <div className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          id="includeLocalInsights"
+          checked={includeLocalInsights}
+          onChange={(e) => setIncludeLocalInsights(e.target.checked)}
+          className="rounded"
+        />
+        <Label htmlFor="includeLocalInsights" className="cursor-pointer">
+          包含当地洞察
+        </Label>
+      </div>
+      <Button onClick={handleGenerate} disabled={loading} className="w-full">
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            生成中...
+          </>
+        ) : (
+          <>
+            <BookOpen className="mr-2 h-4 w-4" />
+            生成路线叙事
+          </>
+        )}
+      </Button>
+      {error && (
+        <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          {error}
+        </div>
+      )}
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle>生成结果</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-sm overflow-auto max-h-96 bg-muted p-4 rounded-lg">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// 评估测试集标签页组件
+function EvaluationTestsetTab() {
+  const [testset, setTestset] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<any>(null);
+
+  async function handleLoadTestset() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getEvaluationTestset();
+      if (data) {
+        setTestset(data);
+      } else {
+        setError('获取测试集失败');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSaveTestset() {
+    if (!testset) {
+      setError('请先加载测试集');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const data = await saveEvaluationTestset(testset);
+      if (data) {
+        setError(null);
+        alert('测试集保存成功');
+      } else {
+        setError('保存测试集失败');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRunTestset() {
+    setRunning(true);
+    setError(null);
+    setResult(null);
+    try {
+      const data = await runEvaluationTestset({
+        params: {
+          useHybridSearch: true,
+          useReranking: false,
+          useQueryExpansion: false,
+        },
+        limit: 10,
+      });
+      if (data) {
+        setResult(data);
+      } else {
+        setError('运行测试集评估失败');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>评估测试集管理</CardTitle>
+          <CardDescription>管理 RAG 评估测试集，运行评估并查看结果</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Button onClick={handleLoadTestset} disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  加载中...
+                </>
+              ) : (
+                <>
+                  <FileText className="mr-2 h-4 w-4" />
+                  加载测试集
+                </>
+              )}
+            </Button>
+            <Button onClick={handleSaveTestset} disabled={saving || !testset} variant="outline">
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  保存测试集
+                </>
+              )}
+            </Button>
+            <Button onClick={handleRunTestset} disabled={running}>
+              {running ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  运行中...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  运行评估
+                </>
+              )}
+            </Button>
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              {error}
+            </div>
+          )}
+
+          {testset && (
+            <Card>
+              <CardHeader>
+                <CardTitle>测试集内容</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="text-sm overflow-auto max-h-96 bg-muted p-4 rounded-lg">
+                  {JSON.stringify(testset, null, 2)}
+                </pre>
+              </CardContent>
+            </Card>
+          )}
+
+          {result && (
+            <Card>
+              <CardHeader>
+                <CardTitle>评估结果</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="text-sm overflow-auto max-h-96 bg-muted p-4 rounded-lg">
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              </CardContent>
+            </Card>
+          )}
+        </CardContent>
+      </Card>
+
+      <ChunkFinderTab />
+    </div>
+  );
+}
+
+// Chunk 查找器组件（用于测试集）
+function ChunkFinderTab() {
+  const [query, setQuery] = useState('');
+  const [limit, setLimit] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [chunks, setChunks] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFindChunks() {
+    if (!query.trim()) {
+      setError('请输入查询文本');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await findChunksForTestset({ query, limit });
+      if (data && data.chunks) {
+        setChunks(data.chunks);
+      } else {
+        setError('查找失败');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>查找相关 Chunks</CardTitle>
+        <CardDescription>根据查询文本查找相关 chunks，用于填充测试集的 groundTruthChunkIds</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="chunkQuery">查询文本 *</Label>
+            <Input
+              id="chunkQuery"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="例如：冰岛租车保险"
+            />
+          </div>
+          <div>
+            <Label htmlFor="chunkLimit">返回数量</Label>
+            <Input
+              id="chunkLimit"
+              type="number"
+              value={limit}
+              onChange={(e) => setLimit(parseInt(e.target.value) || 10)}
+              min={1}
+              max={50}
+            />
+          </div>
+        </div>
+        <Button onClick={handleFindChunks} disabled={loading} className="w-full">
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              查找中...
+            </>
+          ) : (
+            <>
+              <Search className="mr-2 h-4 w-4" />
+              查找 Chunks
+            </>
+          )}
+        </Button>
+
+        {error && (
+          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+            {error}
+          </div>
+        )}
+
+        {chunks.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-sm font-medium">找到 {chunks.length} 个相关 chunks</div>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {chunks.map((chunk, idx) => (
+                <Card key={idx}>
+                  <CardContent className="p-4">
+                    <div className="space-y-2">
+                      <div className="font-medium text-sm">{chunk.chunkId || chunk.id}</div>
+                      {chunk.content && (
+                        <div className="text-xs text-muted-foreground line-clamp-2">
+                          {typeof chunk.content === 'string' ? chunk.content : JSON.stringify(chunk.content)}
+                        </div>
+                      )}
+                      {chunk.similarity !== undefined && (
+                        <Badge variant="outline">相似度: {(chunk.similarity * 100).toFixed(2)}%</Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// 监控指标标签页组件
+function MonitoringTab() {
+  const [metrics, setMetrics] = useState<any>(null);
+  const [performance, setPerformance] = useState<any>(null);
+  const [quality, setQuality] = useState<any>(null);
+  const [cost, setCost] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleLoadMetrics() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [metricsData, perfData, qualityData, costData] = await Promise.all([
+        getRAGMonitoringMetrics(),
+        getRAGPerformanceMetrics(),
+        getRAGQualityMetrics(),
+        getRAGCostMetrics(),
+      ]);
+      setMetrics(metricsData);
+      setPerformance(perfData);
+      setQuality(qualityData);
+      setCost(costData);
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleReset() {
+    if (!confirm('确定要重置所有监控指标吗？')) {
+      return;
+    }
+    setResetting(true);
+    setError(null);
+    try {
+      await resetRAGMonitoringMetrics();
+      alert('监控指标已重置');
+      setMetrics(null);
+      setPerformance(null);
+      setQuality(null);
+      setCost(null);
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  useEffect(() => {
+    handleLoadMetrics();
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>RAG 监控指标</CardTitle>
+              <CardDescription>查看性能、质量、成本等监控指标</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleLoadMetrics} disabled={loading} variant="outline" size="sm">
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    加载中...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    刷新
+                  </>
+                )}
+              </Button>
+              <Button onClick={handleReset} disabled={resetting} variant="destructive" size="sm">
+                {resetting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    重置中...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    重置
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm mb-4">
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {performance && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <TrendingUp className="mr-2 h-5 w-5" />
+                    性能指标
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm">
+                    <div>总检索次数: {performance.totalRetrievals || 0}</div>
+                    <div>平均延迟: {performance.averageLatency || 0}ms</div>
+                    <div>P95 延迟: {performance.p95Latency || 0}ms</div>
+                    <div>错误率: {((performance.errorRate || 0) * 100).toFixed(2)}%</div>
+                    <div>吞吐量: {performance.throughput || 0} req/s</div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {quality && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <CheckCircle className="mr-2 h-5 w-5" />
+                    质量指标
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm">
+                    {quality.averageRecallAtK && (
+                      <div>
+                        Recall@K: {JSON.stringify(quality.averageRecallAtK)}
+                      </div>
+                    )}
+                    <div>平均 MRR: {(quality.averageMRR || 0).toFixed(3)}</div>
+                    {quality.averageNDCGAtK && (
+                      <div>
+                        NDCG@K: {JSON.stringify(quality.averageNDCGAtK)}
+                      </div>
+                    )}
+                    <div>评估总数: {quality.totalEvaluations || 0}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {cost && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <DollarSign className="mr-2 h-5 w-5" />
+                    成本指标
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm">
+                    <div>Embedding 调用: {cost.totalEmbeddingCalls || 0}</div>
+                    <div>LLM 调用: {cost.totalLLMCalls || 0}</div>
+                    <div>Embedding 成本: ${(cost.embeddingCost || 0).toFixed(2)}</div>
+                    <div>LLM 成本: ${(cost.llmCost || 0).toFixed(2)}</div>
+                    <div className="font-medium">总成本: ${(cost.estimatedTotalCost || 0).toFixed(2)}</div>
+                    <div>每次检索成本: ${(cost.costPerRetrieval || 0).toFixed(4)}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {metrics && metrics.cache && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <HardDrive className="mr-2 h-5 w-5" />
+                    缓存指标
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm">
+                    <div>命中率: {((metrics.cache.hitRate || 0) * 100).toFixed(2)}%</div>
+                    <div>总命中: {metrics.cache.totalHits || 0}</div>
+                    <div>总未命中: {metrics.cache.totalMisses || 0}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {metrics && (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>完整指标数据</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="text-sm overflow-auto max-h-96 bg-muted p-4 rounded-lg">
+                  {JSON.stringify(metrics, null, 2)}
+                </pre>
+              </CardContent>
+            </Card>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// 缓存管理标签页组件
+function CacheManagementTab() {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function handleLoadStats() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getRAGCacheStats();
+      if (data) {
+        setStats(data);
+      } else {
+        setError('获取缓存统计失败');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResetStats() {
+    setResetting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await resetRAGCacheStats();
+      if (data) {
+        setMessage('缓存统计已重置');
+        setStats(null);
+      } else {
+        setError('重置缓存统计失败');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  async function handleClearCache() {
+    if (!confirm('确定要清空所有 Embedding 缓存吗？注意：Redis 缓存需要手动清空。')) {
+      return;
+    }
+    setClearing(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await clearRAGCache();
+      if (data) {
+        setMessage(data.message || '缓存已清空');
+        setStats(null);
+      } else {
+        setError('清空缓存失败');
+      }
+    } catch (err) {
+      setError(`错误: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setClearing(false);
+    }
+  }
+
+  useEffect(() => {
+    handleLoadStats();
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>缓存管理</CardTitle>
+          <CardDescription>管理 Embedding 缓存统计和清空缓存</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Button onClick={handleLoadStats} disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  加载中...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  刷新统计
+                </>
+              )}
+            </Button>
+            <Button onClick={handleResetStats} disabled={resetting} variant="outline">
+              {resetting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  重置中...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  重置统计
+                </>
+              )}
+            </Button>
+            <Button onClick={handleClearCache} disabled={clearing} variant="destructive">
+              {clearing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  清空中...
+                </>
+              ) : (
+                <>
+                  <HardDrive className="mr-2 h-4 w-4" />
+                  清空缓存
+                </>
+              )}
+            </Button>
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              {error}
+            </div>
+          )}
+
+          {message && (
+            <div className="p-3 rounded-lg bg-primary/10 text-primary text-sm">
+              {message}
+            </div>
+          )}
+
+          {stats && (
+            <Card>
+              <CardHeader>
+                <CardTitle>缓存统计</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-2xl font-bold">{((stats.hitRate || 0) * 100).toFixed(2)}%</div>
+                    <div className="text-xs text-muted-foreground">命中率</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{stats.totalHits || 0}</div>
+                    <div className="text-xs text-muted-foreground">总命中</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{stats.totalMisses || 0}</div>
+                    <div className="text-xs text-muted-foreground">总未命中</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{stats.totalRequests || 0}</div>
+                    <div className="text-xs text-muted-foreground">总请求数</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{stats.averageHitLatency || 0}ms</div>
+                    <div className="text-xs text-muted-foreground">命中平均延迟</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{stats.averageMissLatency || 0}ms</div>
+                    <div className="text-xs text-muted-foreground">未命中平均延迟</div>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <pre className="text-sm overflow-auto max-h-48 bg-muted p-4 rounded-lg">
+                    {JSON.stringify(stats, null, 2)}
+                  </pre>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ==================== 重新设计的主标签页组件 ====================
+
+// 概览标签页组件
+function OverviewTab() {
+  return (
+    <div className="space-y-4">
+      <StatsTabContent />
+    </div>
+  );
+}
+
+// 统计内容组件（从原来的 stats tab 提取）
+function StatsTabContent() {
+  const [stats, setStats] = useState<RAGStatsResponse | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsCollection, setStatsCollection] = useState('all');
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleGetStats() {
+    setStatsLoading(true);
+    setError(null);
+    try {
+      const collection = statsCollection && statsCollection !== 'all' ? statsCollection : undefined;
+      const result = await getRAGStats(collection);
+      if (result) {
+        setStats(result);
+      } else {
+        setError('获取统计失败');
+      }
+    } catch (error) {
+      console.error('获取统计失败:', error);
+      setError('获取统计失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setStatsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    handleGetStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      {/* 查询控制 */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>RAG 知识库统计</CardTitle>
+              <CardDescription>查看知识库的整体统计信息和集合分布</CardDescription>
+            </div>
+            <Button onClick={handleGetStats} disabled={statsLoading} variant="outline" size="sm">
+              {statsLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  刷新中...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  刷新
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <Label htmlFor="statsCollection">选择集合</Label>
+              <Select
+                value={statsCollection}
+                onValueChange={(value) => {
+                  setStatsCollection(value);
+                  setTimeout(handleGetStats, 100);
+                }}
+              >
+                <SelectTrigger id="statsCollection">
+                  <SelectValue placeholder="全部集合" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部集合</SelectItem>
+                  <SelectItem value="travel_guides">travel_guides</SelectItem>
+                  <SelectItem value="compliance_rules">compliance_rules</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {error && (
+            <div className="mt-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              {error}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {statsLoading && !stats ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : stats ? (
+        <div className="space-y-6">
+          {/* 总体统计卡片 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="border-l-4 border-l-blue-500">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
+                  <FileText className="mr-2 h-4 w-4" />
+                  总文档数
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold">{stats.totalDocuments}</div>
+                <div className="text-xs text-muted-foreground mt-2">知识库文档总数</div>
+              </CardContent>
+            </Card>
+            <Card className="border-l-4 border-l-green-500">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
+                  <Database className="mr-2 h-4 w-4" />
+                  集合数量
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold">{stats.collections?.length || 0}</div>
+                <div className="text-xs text-muted-foreground mt-2">已创建的集合</div>
+              </CardContent>
+            </Card>
+            {stats.byCollection ? (
+              <Card className="border-l-4 border-l-purple-500">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    当前集合文档数
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-4xl font-bold">{stats.byCollection.count}</div>
+                  <div className="text-xs text-muted-foreground mt-2">{stats.byCollection.name}</div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-l-4 border-l-orange-500">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center">
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    平均文档数
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-4xl font-bold">
+                    {stats.collections && stats.collections.length > 0
+                      ? Math.round(stats.totalDocuments / stats.collections.length)
+                      : 0}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">每个集合平均文档数</div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* 集合统计详情 */}
+          {stats.collections && stats.collections.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Database className="mr-2 h-5 w-5" />
+                  集合统计详情
+                </CardTitle>
+                <CardDescription>各集合的文档分布和标签信息</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {stats.collections.map((collection, idx) => (
+                    <Card key={idx} className="hover:shadow-md transition-shadow">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <h3 className="font-semibold text-base">{collection.name}</h3>
+                          <Badge variant="default" className="text-sm">{collection.count} 文档</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {collection.countries && collection.countries.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium text-muted-foreground flex items-center">
+                              <MapPin className="mr-1 h-3 w-3" />
+                              国家/地区
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {collection.countries.map((country, i) => (
+                                <Badge key={i} variant="outline" className="text-xs">
+                                  {country}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {collection.tags && collection.tags.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium text-muted-foreground flex items-center">
+                              <Tag className="mr-1 h-3 w-3" />
+                              标签
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {collection.tags.slice(0, 5).map((tag, i) => (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                              {collection.tags.length > 5 && (
+                                <Badge variant="secondary" className="text-xs">
+                                  +{collection.tags.length - 5}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 指定集合详情 */}
+          {stats.byCollection && (
+            <Card>
+              <CardHeader>
+                <CardTitle>指定集合详情</CardTitle>
+                <CardDescription>当前查询集合的详细信息</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 border rounded-lg space-y-3">
+                  <div className="flex items-start justify-between">
+                    <h3 className="font-semibold text-lg">{stats.byCollection.name}</h3>
+                    <Badge variant="default" className="text-sm">{stats.byCollection.count} 文档</Badge>
+                  </div>
+                  {stats.byCollection.countries && stats.byCollection.countries.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-muted-foreground">国家/地区</div>
+                      <div className="flex flex-wrap gap-1">
+                        {stats.byCollection.countries.map((country, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">
+                            {country}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {stats.byCollection.tags && stats.byCollection.tags.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-muted-foreground">标签</div>
+                      <div className="flex flex-wrap gap-1">
+                        {stats.byCollection.tags.map((tag, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// 知识库管理标签页组件（嵌套 Tabs）
+function KnowledgeBaseManagementTab() {
+  return (
+    <Tabs defaultValue="index" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="index">
+          <Upload className="mr-2 h-4 w-4" />
+          文档索引
+        </TabsTrigger>
+        <TabsTrigger value="management">
+          <Database className="mr-2 h-4 w-4" />
+          索引管理
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="index">
+        <DocumentIndexTab />
+      </TabsContent>
+      <TabsContent value="management">
+        <KnowledgeBaseTab />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+// 内容管理标签页组件（嵌套 Tabs）
+function ContentManagementTab() {
+  return (
+    <Tabs defaultValue="documents" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="documents">
+          <FileText className="mr-2 h-4 w-4" />
+          文档管理
+        </TabsTrigger>
+        <TabsTrigger value="compliance">
+          <Shield className="mr-2 h-4 w-4" />
+          合规规则
+        </TabsTrigger>
+        <TabsTrigger value="narrative">
+          <BookOpen className="mr-2 h-4 w-4" />
+          叙事生成
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="documents">
+        <DocumentsManagementTab />
+      </TabsContent>
+      <TabsContent value="compliance">
+        <ComplianceRulesTab />
+      </TabsContent>
+      <TabsContent value="narrative">
+        <NarrativeGenerationTab />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+// 测试评估标签页组件（嵌套 Tabs）
+function TestingEvaluationTab() {
+  return (
+    <Tabs defaultValue="retrieve" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="retrieve">
+          <Search className="mr-2 h-4 w-4" />
+          检索测试
+        </TabsTrigger>
+        <TabsTrigger value="evaluation">
+          <CheckCircle className="mr-2 h-4 w-4" />
+          质量评估
+        </TabsTrigger>
+        <TabsTrigger value="testset">
+          <FileCheck className="mr-2 h-4 w-4" />
+          测试集
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="retrieve">
+        <RetrieveTestTab />
+      </TabsContent>
+      <TabsContent value="evaluation">
+        <RAGEvaluationTab />
+      </TabsContent>
+      <TabsContent value="testset">
+        <EvaluationTestsetTab />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+// 监控优化标签页组件（嵌套 Tabs）
+function MonitoringOptimizationTab() {
+  return (
+    <Tabs defaultValue="metrics" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="metrics">
+          <Activity className="mr-2 h-4 w-4" />
+          监控指标
+        </TabsTrigger>
+        <TabsTrigger value="prometheus">
+          <Gauge className="mr-2 h-4 w-4" />
+          Prometheus
+        </TabsTrigger>
+        <TabsTrigger value="cache">
+          <HardDrive className="mr-2 h-4 w-4" />
+          缓存管理
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="metrics">
+        <MonitoringTab />
+      </TabsContent>
+      <TabsContent value="prometheus">
+        <PrometheusMetricsTab />
+      </TabsContent>
+      <TabsContent value="cache">
+        <CacheManagementTab />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+// 高级功能标签页组件（嵌套 Tabs）
+function AdvancedFeaturesTab() {
+  return (
+    <Tabs defaultValue="rag-retrieve" className="space-y-4">
+      <TabsList className="grid w-full grid-cols-5">
+        <TabsTrigger value="rag-retrieve">
+          <Search className="mr-2 h-4 w-4" />
+          RAG检索
+        </TabsTrigger>
+        <TabsTrigger value="rag-chat">
+          <MessageSquare className="mr-2 h-4 w-4" />
+          增强对话
+        </TabsTrigger>
+        <TabsTrigger value="gate-evaluate">
+          <ShieldCheck className="mr-2 h-4 w-4" />
+          Gate评估
+        </TabsTrigger>
+        <TabsTrigger value="tools">
+          <Wrench className="mr-2 h-4 w-4" />
+          工具调用
+        </TabsTrigger>
+        <TabsTrigger value="query-pairs">
+          <FileCheck className="mr-2 h-4 w-4" />
+          Query-Pairs
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="rag-retrieve">
+        <RAGRetrieveTab />
+      </TabsContent>
+      <TabsContent value="rag-chat">
+        <RAGChatTab />
+      </TabsContent>
+      <TabsContent value="gate-evaluate">
+        <GateEvaluateTab />
+      </TabsContent>
+      <TabsContent value="tools">
+        <RAGToolsTab />
+      </TabsContent>
+      <TabsContent value="query-pairs">
+        <QueryPairsTab />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+// RAG检索标签页（带降级策略）
+function RAGRetrieveTab() {
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<string>('');
+  const [options, setOptions] = useState({
+    topK: 5,
+    minScore: 0.7,
+    enableReranking: true,
+    enableQueryExpansion: false,
+  });
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleRetrieve() {
+    if (!query.trim()) {
+      alert('请输入查询文本');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await ragRetrieveWithFallback({
+        query,
+        category: category || undefined,
+        options,
+      });
+      setResult(data);
+    } catch (error) {
+      console.error('检索失败:', error);
+      alert('检索失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>RAG查询检索（5层降级策略）</CardTitle>
+          <CardDescription>执行RAG检索，支持自动降级策略</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="retrieve-query">查询文本 *</Label>
+            <Textarea
+              id="retrieve-query"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="例如：冰岛蓝湖温泉现在开门吗"
+              rows={3}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="retrieve-category">查询类别</Label>
+              <Select value={category || 'all'} onValueChange={(value) => setCategory(value === 'all' ? '' : value)}>
+                <SelectTrigger id="retrieve-category">
+                  <SelectValue placeholder="选择类别" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部</SelectItem>
+                  <SelectItem value="WEATHER">WEATHER</SelectItem>
+                  <SelectItem value="POI_HOURS">POI_HOURS</SelectItem>
+                  <SelectItem value="RULES">RULES</SelectItem>
+                  <SelectItem value="GENERAL">GENERAL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="retrieve-topK">返回数量</Label>
+              <Input
+                id="retrieve-topK"
+                type="number"
+                value={options.topK}
+                onChange={(e) => setOptions({ ...options, topK: parseInt(e.target.value) || 5 })}
+                min={1}
+                max={20}
+              />
+            </div>
+            <div>
+              <Label htmlFor="retrieve-minScore">最小相似度</Label>
+              <Input
+                id="retrieve-minScore"
+                type="number"
+                step="0.1"
+                value={options.minScore}
+                onChange={(e) => setOptions({ ...options, minScore: parseFloat(e.target.value) || 0.7 })}
+                min={0}
+                max={1}
+              />
+            </div>
+            <div className="flex items-center gap-4 pt-6">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="enable-reranking"
+                  checked={options.enableReranking}
+                  onChange={(e) => setOptions({ ...options, enableReranking: e.target.checked })}
+                />
+                <Label htmlFor="enable-reranking" className="cursor-pointer">启用重排序</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="enable-expansion"
+                  checked={options.enableQueryExpansion}
+                  onChange={(e) => setOptions({ ...options, enableQueryExpansion: e.target.checked })}
+                />
+                <Label htmlFor="enable-expansion" className="cursor-pointer">启用查询扩展</Label>
+              </div>
+            </div>
+          </div>
+          <Button onClick={handleRetrieve} disabled={loading} className="w-full">
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                检索中...
+              </>
+            ) : (
+              <>
+                <Search className="mr-2 h-4 w-4" />
+                执行检索
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle>检索结果</CardTitle>
+            <CardDescription>
+              降级层级: {result.fallbackLevel || 'N/A'} | 置信度: {result.confidence?.toFixed(3) || 'N/A'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {result.chunks && result.chunks.length > 0 ? (
+                result.chunks.map((chunk: any, idx: number) => (
+                  <Card key={idx} className="border-l-4 border-l-blue-500">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <Badge variant="outline">{chunk.chunkId}</Badge>
+                        <Badge>相似度: {(chunk.score || 0).toFixed(3)}</Badge>
+                      </div>
+                      <p className="text-sm mb-2">{chunk.content}</p>
+                      {chunk.metadata && (
+                        <div className="text-xs text-muted-foreground">
+                          来源: {chunk.metadata.source} | 类别: {chunk.metadata.category}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  {result.fallbackMessage || '未找到相关结果'}
+                  {result.officialLinks && result.officialLinks.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-medium mb-2">官方链接:</p>
+                      {result.officialLinks.map((link: string, idx: number) => (
+                        <a key={idx} href={link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-sm">
+                          {link}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// RAG增强对话标签页
+function RAGChatTab() {
+  const [message, setMessage] = useState('');
+  const [conversationId, setConversationId] = useState('');
+  const [category, setCategory] = useState<string>('');
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleChat() {
+    if (!message.trim()) {
+      alert('请输入消息');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await ragChat({
+        message,
+        conversationId: conversationId || undefined,
+        category: category || undefined,
+      });
+      setResult(data);
+    } catch (error) {
+      console.error('对话失败:', error);
+      alert('对话失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>RAG增强对话</CardTitle>
+          <CardDescription>基于RAG检索的增强对话，自动调用LLM生成回答</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="chat-message">用户消息 *</Label>
+            <Textarea
+              id="chat-message"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="例如：冰岛环岛路线推荐"
+              rows={4}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="chat-conversation-id">对话ID（可选）</Label>
+              <Input
+                id="chat-conversation-id"
+                value={conversationId}
+                onChange={(e) => setConversationId(e.target.value)}
+                placeholder="用于上下文"
+              />
+            </div>
+            <div>
+              <Label htmlFor="chat-category">查询类别</Label>
+              <Select value={category || 'all'} onValueChange={(value) => setCategory(value === 'all' ? '' : value)}>
+                <SelectTrigger id="chat-category">
+                  <SelectValue placeholder="选择类别" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部</SelectItem>
+                  <SelectItem value="WEATHER">WEATHER</SelectItem>
+                  <SelectItem value="POI_HOURS">POI_HOURS</SelectItem>
+                  <SelectItem value="RULES">RULES</SelectItem>
+                  <SelectItem value="GENERAL">GENERAL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button onClick={handleChat} disabled={loading} className="w-full">
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                生成中...
+              </>
+            ) : (
+              <>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                发送消息
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle>回答</CardTitle>
+            <CardDescription>
+              降级层级: {result.fallbackLevel || 'N/A'} | 置信度: {result.confidence?.toFixed(3) || 'N/A'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="whitespace-pre-wrap">{result.reply || '无回答'}</p>
+              </div>
+              {result.sources && result.sources.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium mb-2">来源:</p>
+                  {result.sources.map((source: any, idx: number) => (
+                    <Card key={idx} className="mb-2">
+                      <CardContent className="p-3">
+                        <div className="font-medium text-sm">{source.title}</div>
+                        <p className="text-xs text-muted-foreground mt-1">{source.snippet}</p>
+                        {source.url && (
+                          <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs">
+                            {source.url}
+                          </a>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// Gate决策评估标签页
+function GateEvaluateTab() {
+  const [request, setRequest] = useState({
+    origin: '',
+    destination: '',
+    startDate: '',
+    endDate: '',
+    mode: 'drive',
+    party: {
+      adults: 2,
+      children: 0,
+      fitnessLevel: 'moderate',
+    },
+  });
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleEvaluate() {
+    if (!request.origin || !request.destination) {
+      alert('请填写起点和终点');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await gateEvaluate({ request });
+      setResult(data);
+    } catch (error) {
+      console.error('评估失败:', error);
+      alert('评估失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Gate决策评估</CardTitle>
+          <CardDescription>评估路线/行程是否应该存在（Should-Exist Gate）</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="gate-origin">起点 *</Label>
+              <Input
+                id="gate-origin"
+                value={request.origin}
+                onChange={(e) => setRequest({ ...request, origin: e.target.value })}
+                placeholder="例如：Reykjavik"
+              />
+            </div>
+            <div>
+              <Label htmlFor="gate-destination">终点 *</Label>
+              <Input
+                id="gate-destination"
+                value={request.destination}
+                onChange={(e) => setRequest({ ...request, destination: e.target.value })}
+                placeholder="例如：Landmannalaugar"
+              />
+            </div>
+            <div>
+              <Label htmlFor="gate-start-date">开始日期</Label>
+              <Input
+                id="gate-start-date"
+                type="date"
+                value={request.startDate}
+                onChange={(e) => setRequest({ ...request, startDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="gate-end-date">结束日期</Label>
+              <Input
+                id="gate-end-date"
+                type="date"
+                value={request.endDate}
+                onChange={(e) => setRequest({ ...request, endDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="gate-mode">交通方式</Label>
+              <Select value={request.mode} onValueChange={(value) => setRequest({ ...request, mode: value })}>
+                <SelectTrigger id="gate-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="drive">自驾</SelectItem>
+                  <SelectItem value="walk">步行</SelectItem>
+                  <SelectItem value="bike">骑行</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="gate-fitness">体能等级</Label>
+              <Select
+                value={request.party.fitnessLevel}
+                onValueChange={(value) => setRequest({ ...request, party: { ...request.party, fitnessLevel: value } })}
+              >
+                <SelectTrigger id="gate-fitness">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">低</SelectItem>
+                  <SelectItem value="moderate">中等</SelectItem>
+                  <SelectItem value="high">高</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="gate-adults">成人数量</Label>
+              <Input
+                id="gate-adults"
+                type="number"
+                value={request.party.adults}
+                onChange={(e) => setRequest({ ...request, party: { ...request.party, adults: parseInt(e.target.value) || 0 } })}
+                min={0}
+              />
+            </div>
+            <div>
+              <Label htmlFor="gate-children">儿童数量</Label>
+              <Input
+                id="gate-children"
+                type="number"
+                value={request.party.children}
+                onChange={(e) => setRequest({ ...request, party: { ...request.party, children: parseInt(e.target.value) || 0 } })}
+                min={0}
+              />
+            </div>
+          </div>
+          <Button onClick={handleEvaluate} disabled={loading} className="w-full">
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                评估中...
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="mr-2 h-4 w-4" />
+                执行评估
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle>评估结果</CardTitle>
+            <CardDescription>
+              结果: {result.gateResult || 'N/A'} | 置信度: {result.confidence?.toFixed(3) || 'N/A'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="font-medium">{result.decision || '无决策'}</p>
+              </div>
+              {result.violations && result.violations.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium mb-2">违规项:</p>
+                  {result.violations.map((violation: any, idx: number) => (
+                    <Card key={idx} className="mb-2 border-l-4 border-l-red-500">
+                      <CardContent className="p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="destructive">{violation.type}</Badge>
+                          <Badge>{violation.severity}</Badge>
+                        </div>
+                        <p className="text-sm">{violation.detail}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+              {result.requiredAdjustments && result.requiredAdjustments.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium mb-2">必需调整:</p>
+                  {result.requiredAdjustments.map((adj: any, idx: number) => (
+                    <Card key={idx} className="mb-2 border-l-4 border-l-yellow-500">
+                      <CardContent className="p-3">
+                        <div className="font-medium text-sm">{adj.action}</div>
+                        <p className="text-xs text-muted-foreground mt-1">{adj.why}</p>
+                        {adj.alternativeRoute && (
+                          <p className="text-xs mt-1">替代路线: {adj.alternativeRoute}</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// 工具调用标签页
+function RAGToolsTab() {
+  const [activeTool, setActiveTool] = useState<'weather' | 'places' | 'browse'>('weather');
+  const [weatherParams, setWeatherParams] = useState({ location: '', date: '' });
+  const [placesParams, setPlacesParams] = useState({ query: '', fields: [] as string[] });
+  const [browseParams, setBrowseParams] = useState({ url: '', query: '' });
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleWeather() {
+    if (!weatherParams.location) {
+      alert('请输入地点');
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await ragToolWeather(weatherParams);
+      setResult(data);
+    } catch (error) {
+      console.error('天气查询失败:', error);
+      alert('查询失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handlePlaces() {
+    if (!placesParams.query) {
+      alert('请输入查询');
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await ragToolPlaces(placesParams);
+      setResult(data);
+    } catch (error) {
+      console.error('POI查询失败:', error);
+      alert('查询失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleBrowse() {
+    if (!browseParams.url) {
+      alert('请输入URL');
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await ragToolBrowse(browseParams);
+      setResult(data);
+    } catch (error) {
+      console.error('网页抓取失败:', error);
+      alert('抓取失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>工具调用</CardTitle>
+          <CardDescription>通过MCP Tools调用外部服务</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={activeTool} onValueChange={(v) => setActiveTool(v as any)}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="weather">
+                <Cloud className="mr-2 h-4 w-4" />
+                天气查询
+              </TabsTrigger>
+              <TabsTrigger value="places">
+                <MapPin className="mr-2 h-4 w-4" />
+                POI查询
+              </TabsTrigger>
+              <TabsTrigger value="browse">
+                <Globe className="mr-2 h-4 w-4" />
+                网页浏览
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="weather" className="space-y-4 mt-4">
+              <div>
+                <Label htmlFor="weather-location">地点 *</Label>
+                <Input
+                  id="weather-location"
+                  value={weatherParams.location}
+                  onChange={(e) => setWeatherParams({ ...weatherParams, location: e.target.value })}
+                  placeholder="例如：Reykjavik, Iceland"
+                />
+              </div>
+              <div>
+                <Label htmlFor="weather-date">日期</Label>
+                <Input
+                  id="weather-date"
+                  type="date"
+                  value={weatherParams.date}
+                  onChange={(e) => setWeatherParams({ ...weatherParams, date: e.target.value })}
+                />
+              </div>
+              <Button onClick={handleWeather} disabled={loading} className="w-full">
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Cloud className="mr-2 h-4 w-4" />}
+                查询天气
+              </Button>
+            </TabsContent>
+            <TabsContent value="places" className="space-y-4 mt-4">
+              <div>
+                <Label htmlFor="places-query">查询 *</Label>
+                <Input
+                  id="places-query"
+                  value={placesParams.query}
+                  onChange={(e) => setPlacesParams({ ...placesParams, query: e.target.value })}
+                  placeholder="例如：Blue Lagoon Iceland"
+                />
+              </div>
+              <div>
+                <Label htmlFor="places-fields">字段（逗号分隔）</Label>
+                <Input
+                  id="places-fields"
+                  value={placesParams.fields.join(',')}
+                  onChange={(e) => setPlacesParams({ ...placesParams, fields: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                  placeholder="例如：name,address,opening_hours,rating"
+                />
+              </div>
+              <Button onClick={handlePlaces} disabled={loading} className="w-full">
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
+                查询POI
+              </Button>
+            </TabsContent>
+            <TabsContent value="browse" className="space-y-4 mt-4">
+              <div>
+                <Label htmlFor="browse-url">URL *</Label>
+                <Input
+                  id="browse-url"
+                  value={browseParams.url}
+                  onChange={(e) => setBrowseParams({ ...browseParams, url: e.target.value })}
+                  placeholder="例如：https://www.road.is/travel-info/road-conditions-and-weather/"
+                />
+              </div>
+              <div>
+                <Label htmlFor="browse-query">查询关键词</Label>
+                <Input
+                  id="browse-query"
+                  value={browseParams.query}
+                  onChange={(e) => setBrowseParams({ ...browseParams, query: e.target.value })}
+                  placeholder="例如：F208 road status"
+                />
+              </div>
+              <Button onClick={handleBrowse} disabled={loading} className="w-full">
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
+                抓取网页
+              </Button>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle>查询结果</CardTitle>
+            <CardDescription>
+              {result.cached ? '（缓存）' : ''} {result.timestamp ? new Date(result.timestamp).toLocaleString() : ''}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-xs bg-muted p-4 rounded-lg overflow-auto max-h-96">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// Prometheus 指标标签页
+function PrometheusMetricsTab() {
+  const [metrics, setMetrics] = useState<string>('');
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  async function loadMetrics() {
+    setLoading(true);
+    try {
+      const data = await getRAGPrometheusMetrics();
+      setMetrics(data || '');
+    } catch (error) {
+      console.error('获取 Prometheus 指标失败:', error);
+      alert('获取失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadStats() {
+    setStatsLoading(true);
+    try {
+      const data = await getRAGMetricsStats();
+      setStats(data);
+    } catch (error) {
+      console.error('获取统计信息失败:', error);
+      alert('获取失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setStatsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadMetrics();
+    loadStats();
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Prometheus 监控指标</CardTitle>
+              <CardDescription>Prometheus 格式的所有监控指标</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={loadStats} disabled={statsLoading} variant="outline" size="sm">
+                {statsLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    刷新中...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    刷新统计
+                  </>
+                )}
+              </Button>
+              <Button onClick={loadMetrics} disabled={loading} variant="outline" size="sm">
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    刷新中...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    刷新指标
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {stats && (
+            <div className="mb-4 p-4 bg-muted rounded-lg">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <div className="text-sm text-muted-foreground">缓存命中</div>
+                  <div className="text-2xl font-bold">{stats.cache?.hits || 0}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">缓存未命中</div>
+                  <div className="text-2xl font-bold">{stats.cache?.misses || 0}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">命中率</div>
+                  <div className="text-2xl font-bold">{stats.cache?.hitRate || '0%'}</div>
+                </div>
+              </div>
+              {stats.timestamp && (
+                <div className="text-xs text-muted-foreground mt-2">
+                  更新时间: {new Date(stats.timestamp).toLocaleString()}
+                </div>
+              )}
+            </div>
+          )}
+          <div>
+            <Label>Prometheus 指标（text/plain 格式）</Label>
+            <Textarea
+              value={metrics}
+              readOnly
+              rows={20}
+              className="font-mono text-xs mt-2"
+              placeholder="点击刷新按钮加载指标..."
+            />
+          </div>
+          <div className="mt-4 text-sm text-muted-foreground">
+            <p>提示：这些指标可以直接被 Prometheus 抓取，端点: <code className="bg-muted px-1 rounded">GET /api/rag/metrics</code></p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -40,3 +40,6 @@ export * from './planning-workbench';
 
 // RAG 和 LLM 管理
 export * from './rag-llm';
+
+// 图片上传服务
+export * from './upload';

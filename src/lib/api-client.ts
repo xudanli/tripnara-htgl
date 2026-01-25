@@ -28,7 +28,7 @@ const getEnvVar = (key: string): string | undefined => {
 const API_BASE_URL = 
   getEnvVar('NEXT_PUBLIC_API_BASE_URL') || 
   getEnvVar('VITE_API_BASE_URL') || 
-  'http://localhost:3000/api';
+  'http://localhost:8989/api';
 
 /**
  * 获取完整的API URL

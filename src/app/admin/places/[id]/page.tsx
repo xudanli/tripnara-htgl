@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { getPlaceById, updatePlace, getPlaces } from '@/services/places';
 import type { Place, UpdatePlaceRequest, PlaceCategory, PlaceListItem } from '@/types/api';
 import DeepSeekAssistant from '@/components/places/DeepSeekAssistant';
+import PlaceImageUploader from '@/components/places/PlaceImageUploader';
 
 const categoryLabels: Record<PlaceCategory, string> = {
   ATTRACTION: '景点',
@@ -486,6 +487,12 @@ export default function PlaceDetailPage() {
 
         {/* 其他信息 */}
         <div className="space-y-6">
+          {/* 图片管理 */}
+          <PlaceImageUploader
+            placeId={place.id}
+            placeName={place.nameCN || place.nameEN || ''}
+          />
+
           {/* 城市信息 */}
           {place.city && (
             <div className="rounded-lg border bg-card p-6 shadow-sm">
