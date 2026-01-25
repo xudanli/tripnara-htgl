@@ -491,6 +491,9 @@ export default function PlaceDetailPage() {
           <PlaceImageUploader
             placeId={place.id}
             placeName={place.nameCN || place.nameEN || ''}
+            placeNameEn={place.nameEN}
+            country={place.city?.countryCode}
+            category={place.category}
           />
 
           {/* 城市信息 */}

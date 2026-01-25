@@ -5,10 +5,26 @@
 
 // 获取后端服务基础 URL（服务端环境变量，不需要 NEXT_PUBLIC_ 前缀）
 // 注意：后端服务的基础 URL 已经包含了 /api 前缀
-const BACKEND_BASE_URL = 
-  process.env.BACKEND_API_BASE_URL || 
-  process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL ||
-  'http://localhost:3000/api';
+// 支持两种配置方式：
+// 1. 直接配置完整 URL: BACKEND_API_BASE_URL=http://10.108.49.63:3000/api
+// 2. 分别配置 HOST 和 PORT: BACKEND_HOST=10.108.49.63 BACKEND_PORT=3000
+function getBackendBaseUrl(): string {
+  // 优先使用完整的 URL 配置
+  if (process.env.BACKEND_API_BASE_URL) {
+    return process.env.BACKEND_API_BASE_URL;
+  }
+  if (process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL;
+  }
+  
+  // 如果配置了 HOST 和 PORT，则组合使用
+  const host = process.env.BACKEND_HOST || process.env.NEXT_PUBLIC_BACKEND_HOST || 'localhost';
+  const port = process.env.BACKEND_PORT || process.env.NEXT_PUBLIC_BACKEND_PORT || '3000';
+  
+  return `http://${host}:${port}/api`;
+}
+
+const BACKEND_BASE_URL = getBackendBaseUrl();
 
 /**
  * 获取后端服务的完整 URL
@@ -141,9 +157,32 @@ export async function proxyPutToBackend<T = unknown>(
  * 代理 DELETE 请求到后端服务
  */
 export async function proxyDeleteToBackend<T = unknown>(
-  path: string
+  path: string,
+  searchParams?: URLSearchParams | Record<string, string | number | boolean | undefined>
 ): Promise<Response> {
-  return proxyToBackend<T>(path, {
+  let url = path;
+  
+  // 处理查询参数
+  if (searchParams) {
+    const params = new URLSearchParams();
+    if (searchParams instanceof URLSearchParams) {
+      searchParams.forEach((value, key) => {
+        params.append(key, value);
+      });
+    } else {
+      Object.entries(searchParams).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const queryString = params.toString();
+    if (queryString) {
+      url += `?${queryString}`;
+    }
+  }
+
+  return proxyToBackend<T>(url, {
     method: 'DELETE',
   });
 }
