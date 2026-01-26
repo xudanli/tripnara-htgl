@@ -7,12 +7,13 @@ import { proxyPostToBackend } from '@/lib/backend-client';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params;
+    const messageId = params.id;
+    const body = await request.json();
 
-    if (!id) {
+    if (!messageId) {
       const errorResponse = {
         success: false,
         error: {
@@ -23,10 +24,8 @@ export async function POST(
       return NextResponse.json(errorResponse, { status: 400 });
     }
 
-    const body = await request.json();
-
     // 代理请求到后端服务
-    const backendResponse = await proxyPostToBackend(`/contact/admin/messages/${id}/reply`, body);
+    const backendResponse = await proxyPostToBackend(`/contact/admin/messages/${messageId}/reply`, body);
     const data = await backendResponse.json();
 
     // 返回后端服务的响应

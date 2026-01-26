@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { proxyGetToBackend, proxyPostToBackend } from '@/lib/backend-client';
 
 /**
- * GET /api/readiness/admin/packs
- * 获取准备包列表 - 代理请求到真实后端服务
+ * GET /api/readiness/admin/packing-guides
+ * 获取打包指南列表 - 代理请求到真实后端服务
  */
 export async function GET(request: NextRequest) {
   try {
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     });
 
     // 代理请求到后端服务
-    const backendResponse = await proxyGetToBackend('/readiness/admin/packs', queryParams);
+    const backendResponse = await proxyGetToBackend('/readiness/admin/packing-guides', queryParams);
     const data = await backendResponse.json();
 
     // 返回后端服务的响应
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: error instanceof Error ? error.message : '获取准备包列表失败',
+        message: error instanceof Error ? error.message : '获取打包指南列表失败',
       },
     };
     return NextResponse.json(errorResponse, { status: 500 });
@@ -37,15 +37,15 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/readiness/admin/packs
- * 创建准备包 - 代理请求到真实后端服务
+ * POST /api/readiness/admin/packing-guides
+ * 创建打包指南 - 代理请求到真实后端服务
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
     // 代理请求到后端服务
-    const backendResponse = await proxyPostToBackend('/readiness/admin/packs', body);
+    const backendResponse = await proxyPostToBackend('/readiness/admin/packing-guides', body);
     const data = await backendResponse.json();
 
     // 返回后端服务的响应
@@ -55,10 +55,9 @@ export async function POST(request: NextRequest) {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: error instanceof Error ? error.message : '创建准备包失败',
+        message: error instanceof Error ? error.message : '创建打包指南失败',
       },
     };
     return NextResponse.json(errorResponse, { status: 500 });
   }
 }
-

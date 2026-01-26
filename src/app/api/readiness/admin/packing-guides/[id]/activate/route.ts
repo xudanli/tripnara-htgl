@@ -1,30 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { proxyGetToBackend } from '@/lib/backend-client';
+import { proxyPatchToBackend } from '@/lib/backend-client';
 
 /**
- * GET /api/contact/admin/messages/[id]
- * 获取联系消息详情 - 代理请求到真实后端服务
+ * PATCH /api/readiness/admin/packing-guides/:id/activate
+ * 激活/停用打包指南 - 代理请求到真实后端服务
  */
-export async function GET(
+export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const messageId = params.id;
+    const guideId = params.id;
+    const body = await request.json();
 
-    if (!messageId) {
+    if (!guideId) {
       const errorResponse = {
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: '缺少消息ID',
+          message: '缺少指南ID',
         },
       };
       return NextResponse.json(errorResponse, { status: 400 });
     }
 
     // 代理请求到后端服务
-    const backendResponse = await proxyGetToBackend(`/contact/admin/messages/${messageId}`);
+    const backendResponse = await proxyPatchToBackend(`/readiness/admin/packing-guides/${guideId}/activate`, body);
     const data = await backendResponse.json();
 
     // 返回后端服务的响应
@@ -34,7 +35,7 @@ export async function GET(
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: error instanceof Error ? error.message : '获取联系消息详情失败',
+        message: error instanceof Error ? error.message : '激活/停用打包指南失败',
       },
     };
     return NextResponse.json(errorResponse, { status: 500 });

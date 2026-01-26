@@ -188,6 +188,19 @@ export async function proxyDeleteToBackend<T = unknown>(
 }
 
 /**
+ * 代理 PATCH 请求到后端服务
+ */
+export async function proxyPatchToBackend<T = unknown>(
+  path: string,
+  body?: unknown
+): Promise<Response> {
+  return proxyToBackend<T>(path, {
+    method: 'PATCH',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+/**
  * 代理 FormData 请求到后端服务（用于文件上传）
  */
 export async function proxyFormDataToBackend(

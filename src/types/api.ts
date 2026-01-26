@@ -3504,3 +3504,245 @@ export interface ExportQueryPairsForEvaluationResponse {
     ground_truth_document_ids: string[];
   }>;
 }
+
+// ==================== 打包清单模板管理 ====================
+
+// 打包清单模板元数据
+export interface PackingChecklistTemplateMetadata {
+  version: string;
+  last_updated: string;
+  data_sources?: string[];
+  [key: string]: unknown;
+}
+
+// 打包清单模板数据（完整结构，根据实际 JSON 结构定义）
+export interface PackingChecklistTemplate {
+  metadata: PackingChecklistTemplateMetadata;
+  quick_checklist_summer?: Record<string, unknown>;
+  quick_checklist_transition?: Record<string, unknown>;
+  quick_checklist_winter?: Record<string, unknown>;
+  template_by_user_type?: Record<string, unknown>;
+  seasonal_quantity_guide?: Record<string, unknown>;
+  packing_order_steps?: Record<string, unknown>;
+  pre_departure_final_checklist?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+// 打包清单模板列表项
+export interface PackingChecklistTemplateListItem {
+  id: string;
+  version: string;
+  lastUpdated: string;
+  templateData: PackingChecklistTemplate; // 列表接口也返回完整数据
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  metadata: PackingChecklistTemplateMetadata;
+}
+
+// 打包清单模板详情
+export interface PackingChecklistTemplateDetail extends PackingChecklistTemplateListItem {
+  templateData: PackingChecklistTemplate;
+}
+
+// 获取模板列表参数
+export interface GetPackingTemplatesParams {
+  page?: number;
+  limit?: number;
+  version?: string;
+  isActive?: boolean;
+  search?: string;
+}
+
+// 获取模板列表响应
+export interface GetPackingTemplatesResponse {
+  templates: PackingChecklistTemplateListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// 创建模板请求
+export interface CreatePackingTemplateRequest {
+  version: string;
+  lastUpdated: string;
+  templateData: PackingChecklistTemplate;
+  isActive?: boolean;
+}
+
+// 更新模板请求
+export interface UpdatePackingTemplateRequest {
+  version?: string;
+  lastUpdated?: string;
+  templateData?: PackingChecklistTemplate;
+  isActive?: boolean;
+}
+
+// 激活/停用模板请求
+export interface ActivatePackingTemplateRequest {
+  isActive: boolean;
+}
+
+// 批量导入模板请求
+export interface BatchImportPackingTemplatesRequest {
+  templates: Array<{
+    version: string;
+    lastUpdated: string;
+    templateData: PackingChecklistTemplate;
+    isActive?: boolean;
+  }>;
+  overwrite?: boolean;
+}
+
+// 批量导入模板响应
+export interface BatchImportPackingTemplatesResponse {
+  successCount: number;
+  totalCount: number;
+  importedIds: string[];
+  errors?: Array<{
+    index: number;
+    error: string;
+  }>;
+}
+
+// 模板统计信息
+export interface PackingTemplatesStats {
+  total: number;
+  active: number;
+  inactive: number;
+  byVersion: Record<string, number>;
+  latestVersion: string | null;
+}
+
+// 删除模板响应
+export interface DeletePackingTemplateResponse {
+  id: string;
+  deleted: boolean;
+  message: string;
+}
+
+// ==================== 打包指南管理 ====================
+
+// 打包指南元数据
+export interface PackingGuideMetadata {
+  version: string;
+  last_updated: string;
+  language?: string;
+  [key: string]: unknown;
+}
+
+// 打包指南数据（完整结构，根据实际 JSON 结构定义）
+export interface PackingGuide {
+  metadata: PackingGuideMetadata;
+  layering_system?: Record<string, unknown>;
+  footwear?: Record<string, unknown>;
+  accessories?: Record<string, unknown>;
+  pants?: Record<string, unknown>;
+  bags?: Record<string, unknown>;
+  electronics_protection?: Record<string, unknown>;
+  other_essentials?: Record<string, unknown>;
+  photography_gear?: Record<string, unknown>;
+  swimming_gear?: Record<string, unknown>;
+  seasonal_packing_lists?: Record<string, unknown>;
+  packing_tips?: Record<string, unknown>;
+  what_not_to_bring?: Record<string, unknown>;
+  budget_options?: Record<string, unknown>;
+  pro_tips?: Record<string, unknown>;
+  red_flags?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+// 打包指南列表项
+export interface PackingGuideListItem {
+  id: string;
+  version: string;
+  lastUpdated: string;
+  guideData: PackingGuide; // 列表接口也返回完整数据
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  metadata: PackingGuideMetadata;
+}
+
+// 打包指南详情
+export interface PackingGuideDetail extends PackingGuideListItem {
+  guideData: PackingGuide;
+}
+
+// 获取指南列表参数
+export interface GetPackingGuidesParams {
+  page?: number;
+  limit?: number;
+  version?: string;
+  isActive?: boolean;
+  search?: string;
+}
+
+// 获取指南列表响应
+export interface GetPackingGuidesResponse {
+  guides: PackingGuideListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// 创建指南请求
+export interface CreatePackingGuideRequest {
+  version: string;
+  lastUpdated: string;
+  guideData: PackingGuide;
+  isActive?: boolean;
+}
+
+// 更新指南请求
+export interface UpdatePackingGuideRequest {
+  version?: string;
+  lastUpdated?: string;
+  guideData?: PackingGuide;
+  isActive?: boolean;
+}
+
+// 激活/停用指南请求
+export interface ActivatePackingGuideRequest {
+  isActive: boolean;
+}
+
+// 批量导入指南请求
+export interface BatchImportPackingGuidesRequest {
+  guides: Array<{
+    version: string;
+    lastUpdated: string;
+    guideData: PackingGuide;
+    isActive?: boolean;
+  }>;
+  overwrite?: boolean;
+}
+
+// 批量导入指南响应
+export interface BatchImportPackingGuidesResponse {
+  successCount: number;
+  totalCount: number;
+  importedIds: string[];
+  errors?: Array<{
+    index: number;
+    error: string;
+  }>;
+}
+
+// 指南统计信息
+export interface PackingGuidesStats {
+  total: number;
+  active: number;
+  inactive: number;
+  latestVersion: string | null;
+  latestUpdated: string | null; // ISO 8601 日期字符串
+}
+
+// 删除指南响应
+export interface DeletePackingGuideResponse {
+  id: string;
+  deleted: boolean;
+  message: string;
+}

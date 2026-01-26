@@ -120,6 +120,23 @@ import type {
   ExportQueryPairsForEvaluationResponse,
 } from '@/types/api';
 import {
+  getReadinessPacks,
+  getReadinessPackById,
+  createReadinessPack,
+  updateReadinessPack,
+  deleteReadinessPack,
+} from '@/services/readiness';
+import type {
+  ReadinessPack,
+  ReadinessPackListItem,
+  GetReadinessPacksParams,
+  UpdateReadinessPackRequest,
+} from '@/types/api';
+import { RulesEditor } from '@/components/readiness/RulesEditor';
+import { ChecklistsEditor } from '@/components/readiness/ChecklistsEditor';
+import { HazardsEditor } from '@/components/readiness/HazardsEditor';
+import { ReadinessAssistant } from '@/components/readiness/ReadinessAssistant';
+import {
   Loader2,
   BarChart3,
   Upload,
@@ -149,6 +166,11 @@ import {
   Wrench,
   Gauge,
   ShieldCheck,
+  Package,
+  Plus,
+  Eye,
+  ArrowLeft,
+  Save,
 } from 'lucide-react';
 
 export default function RAGPage() {
@@ -160,7 +182,7 @@ export default function RAGPage() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="overview">
             <BarChart3 className="mr-2 h-4 w-4" />
             概览
@@ -180,6 +202,10 @@ export default function RAGPage() {
           <TabsTrigger value="monitoring">
             <Activity className="mr-2 h-4 w-4" />
             监控优化
+          </TabsTrigger>
+          <TabsTrigger value="readiness">
+            <Package className="mr-2 h-4 w-4" />
+            准备度Pack
           </TabsTrigger>
           <TabsTrigger value="advanced">
             <Sparkles className="mr-2 h-4 w-4" />
@@ -210,6 +236,11 @@ export default function RAGPage() {
         {/* 监控优化 */}
         <TabsContent value="monitoring" className="space-y-4">
           <MonitoringOptimizationTab />
+        </TabsContent>
+
+        {/* 准备度Pack管理 */}
+        <TabsContent value="readiness" className="space-y-4">
+          <ReadinessPacksTab />
         </TabsContent>
 
         {/* 高级功能 */}
@@ -2500,6 +2531,240 @@ function NarrativeGenerationTab() {
   );
 }
 
+// 当地洞察标签页组件
+function LocalInsightTab() {
+  const [getForm, setGetForm] = useState({
+    countryCode: '',
+    tags: '',
+    region: '',
+  });
+  const [getLoading, setGetLoading] = useState(false);
+  const [getResult, setGetResult] = useState<any>(null);
+  const [getError, setGetError] = useState<string | null>(null);
+
+  const [refreshForm, setRefreshForm] = useState({
+    countryCode: '',
+    tags: '',
+    region: '',
+  });
+  const [refreshLoading, setRefreshLoading] = useState(false);
+  const [refreshResult, setRefreshResult] = useState<RAGLocalInsightRefreshResponse | null>(null);
+
+  // 获取当地洞察
+  async function handleGetLocalInsight() {
+    if (!getForm.countryCode || !getForm.tags) {
+      setGetError('请填写国家代码和标签');
+      return;
+    }
+
+    setGetLoading(true);
+    setGetError(null);
+    setGetResult(null);
+    try {
+      const result = await getLocalInsight({
+        countryCode: getForm.countryCode,
+        tags: getForm.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        region: getForm.region || undefined,
+      });
+      if (result) {
+        setGetResult(result);
+      } else {
+        setGetError('获取失败，请查看控制台错误信息');
+      }
+    } catch (error) {
+      console.error('获取当地洞察失败:', error);
+      setGetError(`错误: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setGetLoading(false);
+    }
+  }
+
+  // 刷新当地洞察缓存
+  async function handleRefreshLocalInsight() {
+    if (!refreshForm.countryCode || !refreshForm.tags) {
+      alert('请填写国家代码和标签');
+      return;
+    }
+
+    setRefreshLoading(true);
+    try {
+      const result = await refreshLocalInsight({
+        countryCode: refreshForm.countryCode,
+        tags: refreshForm.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        region: refreshForm.region || undefined,
+      });
+      if (result) {
+        setRefreshResult(result);
+      }
+    } catch (error) {
+      console.error('刷新当地洞察失败:', error);
+      alert('刷新失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setRefreshLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* 获取当地洞察 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>获取当地洞察</CardTitle>
+          <CardDescription>
+            从知识库中获取指定国家/地区的当地洞察信息，包括文化礼仪、旅行建议、隐藏景点等
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="getCountryCode">国家代码 *</Label>
+              <Input
+                id="getCountryCode"
+                value={getForm.countryCode}
+                onChange={(e) =>
+                  setGetForm({ ...getForm, countryCode: e.target.value.toUpperCase() })
+                }
+                placeholder="IS"
+                maxLength={2}
+              />
+              <p className="text-xs text-muted-foreground mt-1">ISO 3166-1 alpha-2 格式</p>
+            </div>
+            <div>
+              <Label htmlFor="getTags">标签（逗号分隔） *</Label>
+              <Input
+                id="getTags"
+                value={getForm.tags}
+                onChange={(e) =>
+                  setGetForm({ ...getForm, tags: e.target.value })
+                }
+                placeholder="culture, tips, etiquette"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                可用标签: culture, tips, etiquette, hidden_gems, food, transport, travel-guide
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="getRegion">地区（可选）</Label>
+              <Input
+                id="getRegion"
+                value={getForm.region}
+                onChange={(e) =>
+                  setGetForm({ ...getForm, region: e.target.value })
+                }
+                placeholder="Reykjavik"
+              />
+              <p className="text-xs text-muted-foreground mt-1">不指定则获取全国范围</p>
+            </div>
+          </div>
+          <Button onClick={handleGetLocalInsight} disabled={getLoading} className="w-full">
+            {getLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                获取中...
+              </>
+            ) : (
+              <>
+                <Search className="mr-2 h-4 w-4" />
+                获取当地洞察
+              </>
+            )}
+          </Button>
+          {getError && (
+            <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive">
+              {getError}
+            </div>
+          )}
+          {getResult && (
+            <div className="mt-4 p-4 bg-muted rounded-lg space-y-3">
+              <div className="text-sm font-medium">获取成功</div>
+              <pre className="text-xs bg-background p-3 rounded border overflow-auto max-h-96">
+                {JSON.stringify(getResult, null, 2)}
+              </pre>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 刷新当地洞察缓存 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>刷新当地洞察缓存</CardTitle>
+          <CardDescription>
+            手动触发指定地区的当地洞察信息缓存刷新。当更新了某个地区的旅行攻略、文化礼仪等信息后，调用此接口使对应的缓存失效。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="refreshCountryCode">国家代码 *</Label>
+              <Input
+                id="refreshCountryCode"
+                value={refreshForm.countryCode}
+                onChange={(e) =>
+                  setRefreshForm({ ...refreshForm, countryCode: e.target.value.toUpperCase() })
+                }
+                placeholder="IS"
+                maxLength={2}
+              />
+              <p className="text-xs text-muted-foreground mt-1">ISO 3166-1 alpha-2 格式</p>
+            </div>
+            <div>
+              <Label htmlFor="refreshTags">标签（逗号分隔） *</Label>
+              <Input
+                id="refreshTags"
+                value={refreshForm.tags}
+                onChange={(e) =>
+                  setRefreshForm({ ...refreshForm, tags: e.target.value })
+                }
+                placeholder="culture, tips, etiquette"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                可用标签: culture, tips, etiquette, hidden_gems, food, transport, travel-guide
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="refreshRegion">地区（可选）</Label>
+              <Input
+                id="refreshRegion"
+                value={refreshForm.region}
+                onChange={(e) =>
+                  setRefreshForm({ ...refreshForm, region: e.target.value })
+                }
+                placeholder="Reykjavik"
+              />
+              <p className="text-xs text-muted-foreground mt-1">不指定则刷新全国范围</p>
+            </div>
+          </div>
+          <Button onClick={handleRefreshLocalInsight} disabled={refreshLoading} className="w-full">
+            {refreshLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                刷新中...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                刷新当地洞察
+              </>
+            )}
+          </Button>
+          {refreshResult && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded space-y-2">
+              <div className="text-sm font-medium text-green-800">刷新成功</div>
+              <div className="text-xs text-green-700 space-y-1">
+                <div>国家代码: {refreshResult.countryCode}</div>
+                <div>标签: {refreshResult.tags.join(', ')}</div>
+                {refreshResult.region && <div>地区: {refreshResult.region}</div>}
+                <div>刷新时间: {new Date(refreshResult.refreshedAt).toLocaleString('zh-CN')}</div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // 知识库管理标签页组件
 function KnowledgeBaseTab() {
   const [rebuildLoading, setRebuildLoading] = useState(false);
@@ -3697,7 +3962,7 @@ function MonitoringTab() {
                     <div>总检索次数: {performance.totalRetrievals || 0}</div>
                     <div>平均延迟: {performance.averageLatency || 0}ms</div>
                     <div>P95 延迟: {performance.p95Latency || 0}ms</div>
-                    <div>错误率: {((performance.errorRate || 0) * 100).toFixed(2)}%</div>
+                    <div>错误率: {(Number(performance.errorRate || 0) * 100).toFixed(2)}%</div>
                     <div>吞吐量: {performance.throughput || 0} req/s</div>
                   </div>
                 </CardContent>
@@ -3719,7 +3984,7 @@ function MonitoringTab() {
                         Recall@K: {JSON.stringify(quality.averageRecallAtK)}
                       </div>
                     )}
-                    <div>平均 MRR: {(quality.averageMRR || 0).toFixed(3)}</div>
+                    <div>平均 MRR: {Number(quality.averageMRR || 0).toFixed(3)}</div>
                     {quality.averageNDCGAtK && (
                       <div>
                         NDCG@K: {JSON.stringify(quality.averageNDCGAtK)}
@@ -3743,10 +4008,10 @@ function MonitoringTab() {
                   <div className="space-y-2 text-sm">
                     <div>Embedding 调用: {cost.totalEmbeddingCalls || 0}</div>
                     <div>LLM 调用: {cost.totalLLMCalls || 0}</div>
-                    <div>Embedding 成本: ${(cost.embeddingCost || 0).toFixed(2)}</div>
-                    <div>LLM 成本: ${(cost.llmCost || 0).toFixed(2)}</div>
-                    <div className="font-medium">总成本: ${(cost.estimatedTotalCost || 0).toFixed(2)}</div>
-                    <div>每次检索成本: ${(cost.costPerRetrieval || 0).toFixed(4)}</div>
+                    <div>Embedding 成本: ${Number(cost.embeddingCost || 0).toFixed(2)}</div>
+                    <div>LLM 成本: ${Number(cost.llmCost || 0).toFixed(2)}</div>
+                    <div className="font-medium">总成本: ${Number(cost.estimatedTotalCost || 0).toFixed(2)}</div>
+                    <div>每次检索成本: ${Number(cost.costPerRetrieval || 0).toFixed(4)}</div>
                   </div>
                 </CardContent>
               </Card>
@@ -3762,7 +4027,7 @@ function MonitoringTab() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 text-sm">
-                    <div>命中率: {((metrics.cache.hitRate || 0) * 100).toFixed(2)}%</div>
+                    <div>命中率: {(Number(metrics.cache.hitRate || 0) * 100).toFixed(2)}%</div>
                     <div>总命中: {metrics.cache.totalHits || 0}</div>
                     <div>总未命中: {metrics.cache.totalMisses || 0}</div>
                   </div>
@@ -3930,7 +4195,7 @@ function CacheManagementTab() {
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
-                    <div className="text-2xl font-bold">{((stats.hitRate || 0) * 100).toFixed(2)}%</div>
+                    <div className="text-2xl font-bold">{Number(stats.hitRate || 0).toFixed(2)}%</div>
                     <div className="text-xs text-muted-foreground">命中率</div>
                   </div>
                   <div>
@@ -3942,15 +4207,24 @@ function CacheManagementTab() {
                     <div className="text-xs text-muted-foreground">总未命中</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold">{stats.totalRequests || 0}</div>
+                    <div className="text-2xl font-bold">
+                      {typeof stats.totalRequests === 'object' && stats.totalRequests !== null
+                        ? stats.totalRequests.totalRequests || 0
+                        : Number(stats.totalRequests || 0)}
+                    </div>
                     <div className="text-xs text-muted-foreground">总请求数</div>
+                    {typeof stats.totalRequests === 'object' && stats.totalRequests !== null && stats.totalRequests.qps && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        QPS: {Number(stats.totalRequests.qps).toFixed(2)}
+                      </div>
+                    )}
                   </div>
                   <div>
-                    <div className="text-2xl font-bold">{stats.averageHitLatency || 0}ms</div>
+                    <div className="text-2xl font-bold">{Number(stats.averageHitLatency || 0)}ms</div>
                     <div className="text-xs text-muted-foreground">命中平均延迟</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold">{stats.averageMissLatency || 0}ms</div>
+                    <div className="text-2xl font-bold">{Number(stats.averageMissLatency || 0)}ms</div>
                     <div className="text-xs text-muted-foreground">未命中平均延迟</div>
                   </div>
                 </div>
@@ -4278,6 +4552,10 @@ function ContentManagementTab() {
           <Shield className="mr-2 h-4 w-4" />
           合规规则
         </TabsTrigger>
+        <TabsTrigger value="local-insight">
+          <Globe className="mr-2 h-4 w-4" />
+          当地洞察
+        </TabsTrigger>
         <TabsTrigger value="narrative">
           <BookOpen className="mr-2 h-4 w-4" />
           叙事生成
@@ -4288,6 +4566,9 @@ function ContentManagementTab() {
       </TabsContent>
       <TabsContent value="compliance">
         <ComplianceRulesTab />
+      </TabsContent>
+      <TabsContent value="local-insight">
+        <LocalInsightTab />
       </TabsContent>
       <TabsContent value="narrative">
         <NarrativeGenerationTab />
@@ -5204,6 +5485,648 @@ function PrometheusMetricsTab() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// 准备度Pack管理标签页组件
+function ReadinessPacksTab() {
+  const [view, setView] = useState<'list' | 'detail' | 'create'>('list');
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [packs, setPacks] = useState<ReadinessPackListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [params, setParams] = useState<GetReadinessPacksParams>({
+    page: 1,
+    limit: 20,
+  });
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (view === 'list') {
+      loadPacks();
+    }
+  }, [params, view]);
+
+  async function loadPacks() {
+    setLoading(true);
+    try {
+      const result = await getReadinessPacks(params);
+      if (result) {
+        setPacks(result.packs);
+        setTotal(result.total);
+        setTotalPages(result.totalPages);
+      }
+    } catch (error) {
+      console.error('加载Pack列表失败:', error);
+      alert('加载失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(packId: string) {
+    if (!confirm('确定要删除这个Pack吗？')) {
+      return;
+    }
+
+    try {
+      const result = await deleteReadinessPack(packId);
+      if (result?.deleted) {
+        alert('删除成功');
+        loadPacks();
+      } else {
+        alert('删除失败，请重试');
+      }
+    } catch (error) {
+      console.error('删除失败:', error);
+      alert('删除失败，请重试');
+    }
+  }
+
+  function handleSearch() {
+    setParams((prev) => ({
+      ...prev,
+      page: 1,
+      search: search || undefined,
+    }));
+  }
+
+  function handlePageChange(page: number) {
+    setParams((prev) => ({ ...prev, page }));
+  }
+
+  function getLocalizedName(pack: ReadinessPackListItem): string {
+    return pack.displayNameCN || pack.displayNameEN || pack.displayName || '-';
+  }
+
+  function getLocalizedLocation(pack: ReadinessPackListItem): string {
+    const region = pack.regionCN || pack.regionEN || pack.region;
+    const city = pack.cityCN || pack.cityEN || pack.city;
+    if (region && city) {
+      return `${region} / ${city}`;
+    }
+    return region || city || '-';
+  }
+
+  if (view === 'detail' && selectedPackId) {
+    return (
+      <ReadinessPackDetailView
+        packId={selectedPackId}
+        onBack={() => {
+          setView('list');
+          setSelectedPackId(null);
+        }}
+        onSave={() => {
+          setView('list');
+          setSelectedPackId(null);
+          loadPacks();
+        }}
+      />
+    );
+  }
+
+  if (view === 'create') {
+    return (
+      <ReadinessPackDetailView
+        packId="new"
+        onBack={() => {
+          setView('list');
+          setSelectedPackId(null);
+        }}
+        onSave={() => {
+          setView('list');
+          setSelectedPackId(null);
+          loadPacks();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">准备度Pack管理</h2>
+          <p className="text-muted-foreground mt-2">管理旅行准备度Pack</p>
+        </div>
+        <Button onClick={() => setView('create')}>
+          <Plus className="mr-2 h-4 w-4" />
+          创建Pack
+        </Button>
+      </div>
+
+      {/* 搜索和筛选 */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex gap-4 items-center flex-wrap">
+            <div className="flex-1 flex gap-2 min-w-[300px]">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="搜索（支持中英文）..."
+                  className="pl-10"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                />
+              </div>
+              <Button onClick={handleSearch}>搜索</Button>
+            </div>
+            <Input
+              type="text"
+              placeholder="国家代码 (如: IS)"
+              className="w-32"
+              value={params.countryCode || ''}
+              onChange={(e) =>
+                setParams((prev) => ({
+                  ...prev,
+                  page: 1,
+                  countryCode: e.target.value.toUpperCase() || undefined,
+                }))
+              }
+            />
+            <Select
+              value={params.isActive?.toString() || 'all'}
+              onValueChange={(value) =>
+                setParams((prev) => ({
+                  ...prev,
+                  page: 1,
+                  isActive:
+                    value === 'all' ? undefined : value === 'true',
+                }))
+              }
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部状态</SelectItem>
+                <SelectItem value="true">激活</SelectItem>
+                <SelectItem value="false">未激活</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pack列表 */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-8 text-center text-muted-foreground">加载中...</div>
+          ) : packs.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">暂无Pack</div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Pack ID</TableHead>
+                      <TableHead>显示名称</TableHead>
+                      <TableHead>区域/城市</TableHead>
+                      <TableHead>国家</TableHead>
+                      <TableHead>版本</TableHead>
+                      <TableHead>状态</TableHead>
+                      <TableHead className="text-right">操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {packs.map((pack) => (
+                      <TableRow key={pack.id}>
+                        <TableCell className="font-mono text-xs">{pack.packId}</TableCell>
+                        <TableCell>
+                          <div>{getLocalizedName(pack)}</div>
+                          {pack.displayNameEN && pack.displayNameCN && (
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {pack.displayNameEN}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>{getLocalizedLocation(pack)}</TableCell>
+                        <TableCell>{pack.countryCode}</TableCell>
+                        <TableCell>{pack.version}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={pack.isActive ? 'default' : 'secondary'}
+                            className={
+                              pack.isActive
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }
+                          >
+                            {pack.isActive ? '激活' : '未激活'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setSelectedPackId(pack.packId);
+                                setView('detail');
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setSelectedPackId(pack.packId);
+                                setView('detail');
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(pack.packId)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* 分页 */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between border-t px-6 py-4">
+                  <div className="text-sm text-muted-foreground">
+                    共 {total} 条记录，第 {params.page} / {totalPages} 页
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(params.page! - 1)}
+                      disabled={params.page === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      上一页
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(params.page! + 1)}
+                      disabled={params.page === totalPages}
+                    >
+                      下一页
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// 准备度Pack详情/编辑组件
+function ReadinessPackDetailView({
+  packId,
+  onBack,
+  onSave,
+}: {
+  packId: string;
+  onBack: () => void;
+  onSave: () => void;
+}) {
+  const isNew = packId === 'new';
+  const [pack, setPack] = useState<ReadinessPack | null>(null);
+  const [loading, setLoading] = useState(!isNew);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState<Partial<ReadinessPack>>({
+    packId: '',
+    destinationId: '',
+    displayName: { en: '', zh: '' },
+    version: '1.0.0',
+    geo: {
+      countryCode: '',
+      region: '',
+      city: '',
+    },
+    supportedSeasons: [],
+    rules: [],
+    checklists: [],
+    hazards: [],
+    isActive: true,
+  });
+
+  useEffect(() => {
+    if (!isNew && packId) {
+      loadPack();
+    }
+  }, [packId, isNew]);
+
+  async function loadPack() {
+    setLoading(true);
+    try {
+      const packData = await getReadinessPackById(packId);
+      if (packData) {
+        setPack(packData);
+        setFormData(packData);
+      }
+    } catch (error) {
+      console.error('加载Pack详情失败:', error);
+      alert('加载失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      let result: ReadinessPack | null = null;
+
+      if (isNew) {
+        result = await createReadinessPack({
+          pack: {
+            ...formData,
+            packId: formData.packId!,
+            destinationId: formData.destinationId!,
+            displayName: formData.displayName!,
+            version: formData.version || '1.0.0',
+            lastReviewedAt: new Date().toISOString(),
+            geo: formData.geo!,
+            supportedSeasons: formData.supportedSeasons || [],
+            rules: formData.rules || [],
+            checklists: formData.checklists || [],
+            hazards: formData.hazards || [],
+          } as ReadinessPack,
+        });
+      } else {
+        result = await updateReadinessPack(packId, {
+          pack: formData as ReadinessPack,
+        });
+      }
+
+      if (result) {
+        alert('保存成功');
+        onSave();
+      } else {
+        alert('保存失败，请重试');
+      }
+    } catch (error) {
+      console.error('保存失败:', error);
+      alert('保存失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">加载中...</div>
+      </div>
+    );
+  }
+
+  const displayName = typeof formData.displayName === 'string'
+    ? { en: formData.displayName, zh: '' }
+    : formData.displayName || { en: '', zh: '' };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={onBack}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div>
+          <h2 className="text-2xl font-bold">
+            {isNew ? '创建Pack' : 'Pack详情'}
+          </h2>
+          <p className="text-muted-foreground mt-2">
+            {isNew ? '创建新的准备度Pack' : '编辑Pack信息'}
+          </p>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="space-y-6">
+            {/* 基本信息 */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label>Pack ID *</Label>
+                <Input
+                  value={formData.packId || ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, packId: e.target.value }))
+                  }
+                  disabled={!isNew}
+                  placeholder="pack.is.iceland"
+                />
+              </div>
+              <div>
+                <Label>目的地ID *</Label>
+                <Input
+                  value={formData.destinationId || ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, destinationId: e.target.value }))
+                  }
+                  placeholder="IS-ICELAND"
+                />
+              </div>
+              <div>
+                <Label>显示名称 (英文) *</Label>
+                <Input
+                  value={displayName.en}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      displayName: { ...displayName, en: e.target.value },
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <Label>显示名称 (中文)</Label>
+                <Input
+                  value={displayName.zh || ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      displayName: { ...displayName, zh: e.target.value },
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <Label>版本号</Label>
+                <Input
+                  value={formData.version || ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, version: e.target.value }))
+                  }
+                  placeholder="1.0.0"
+                />
+              </div>
+              <div>
+                <Label>激活状态</Label>
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.isActive ?? true}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, isActive: e.target.checked }))
+                    }
+                    className="rounded"
+                  />
+                  <span className="text-sm">激活</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 地理位置 */}
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold mb-4">地理位置</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>国家代码 *</Label>
+                  <Input
+                    value={formData.geo?.countryCode || ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        geo: { ...prev.geo, countryCode: e.target.value },
+                      }))
+                    }
+                    placeholder="IS"
+                  />
+                </div>
+                <div>
+                  <Label>区域</Label>
+                  <Input
+                    value={typeof formData.geo?.region === 'string' ? formData.geo.region : ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        geo: { 
+                          ...prev.geo, 
+                          countryCode: prev.geo?.countryCode || '',
+                          region: e.target.value 
+                        },
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>城市</Label>
+                  <Input
+                    value={typeof formData.geo?.city === 'string' ? formData.geo.city : ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        geo: { 
+                          ...prev.geo, 
+                          countryCode: prev.geo?.countryCode || '',
+                          city: e.target.value 
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 支持的季节 */}
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold mb-4">支持的季节</h3>
+              <div className="flex flex-wrap gap-2">
+                {(['summer', 'winter', 'shoulder'] as const).map((season) => (
+                  <label key={season} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.supportedSeasons?.includes(season) || false}
+                      onChange={(e) => {
+                        const seasons = formData.supportedSeasons || [];
+                        if (e.target.checked) {
+                          setFormData((prev) => ({
+                            ...prev,
+                            supportedSeasons: [...seasons, season] as typeof seasons,
+                          }));
+                        } else {
+                          setFormData((prev) => ({
+                            ...prev,
+                            supportedSeasons: seasons.filter((s) => s !== season) as typeof seasons,
+                          }));
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-sm capitalize">{season}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* 规则编辑器 */}
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold mb-4">规则</h3>
+              <RulesEditor
+                value={formData.rules || []}
+                onChange={(rules) => setFormData((prev) => ({ ...prev, rules }))}
+              />
+            </div>
+
+            {/* 清单编辑器 */}
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold mb-4">清单</h3>
+              <ChecklistsEditor
+                value={(formData.checklists || []) as any}
+                onChange={(checklists) => setFormData((prev) => ({ ...prev, checklists: checklists as any }))}
+              />
+            </div>
+
+            {/* 风险编辑器 */}
+            {formData.hazards !== undefined && (
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">风险</h3>
+                <HazardsEditor
+                  value={(formData.hazards || []) as any}
+                  onChange={(hazards) => setFormData((prev) => ({ ...prev, hazards: hazards as any }))}
+                />
+              </div>
+            )}
+
+            <div className="flex gap-4 pt-4 border-t">
+              <Button onClick={handleSave} disabled={saving}>
+                <Save className="mr-2 h-4 w-4" />
+                {saving ? '保存中...' : '保存'}
+              </Button>
+              <Button variant="outline" onClick={onBack}>
+                取消
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 翻译助手 */}
+      <ReadinessAssistant
+        pack={formData}
+        onUpdate={(translatedData) => {
+          setFormData((prev) => ({
+            ...prev,
+            ...translatedData,
+          }));
+        }}
+      />
     </div>
   );
 }
