@@ -375,10 +375,25 @@ export default function DeepSeekAssistant({
         ? `\n\n⚠️ **重要提示**：当前数据中已有经纬度坐标（location字段），在输出JSON时必须保留这些坐标，格式为：location: {lat: 当前lat值, lng: 当前lng值}。绝对不要输出 location: null 或省略 location 字段！`
         : '';
 
+      // 获取城市信息用于AI识别（从现有地点中提取）
+      const cityInfo = displayPlaces.length > 0 
+        ? displayPlaces.map(p => ({
+            name: p.city?.name || '',
+            nameCN: p.city?.nameCN || '',
+            nameEN: p.city?.nameEN || '',
+            countryCode: p.city?.countryCode || p.countryCode || '',
+            id: p.city?.id || 0,
+          })).filter(c => c.id > 0)
+        : [];
+      
+      const cityInfoNote = cityInfo.length > 0 
+        ? `\n\n**可用城市信息（用于识别cityId）**：\n${JSON.stringify(cityInfo, null, 2)}\n\n**重要**：如果用户提供了地点名称或城市信息，请根据上述城市列表匹配对应的cityId。如果无法匹配，可以省略cityId字段。`
+        : '';
+
       const systemPrompt = `你是一个专业的数据整理助手，专门帮助整理地点数据。你的核心任务是确保数据的准确性和完整性。
 
 当前地点数据格式（JSON）：
-${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
+${JSON.stringify(currentPlaceData, null, 2)}${locationNote}${cityInfoNote}
 
 地点数据字段说明：
 - id: 地点ID（数字，只读，不要输出）
@@ -405,8 +420,8 @@ ${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
 - description: 地点介绍（可选，详细介绍地点的特色、历史背景、推荐理由等）
 - rating: 评分，0-5之间的数字（可选）
 - googlePlaceId: Google Place ID（可选）
-- location: 位置坐标 {lat: number, lng: number}（可选）
-- cityId: 城市ID（可选，数字）
+- location: 位置坐标 {lat: number, lng: number}（可选，**重要：如果用户提供了地点名称，必须根据地点名称查找准确的经纬度坐标**）
+- cityId: 城市ID（可选，数字，**重要：如果用户提供了地点名称或城市信息，必须识别并输出对应的城市ID**）
 - metadata: 元数据对象（可选）
 - physicalMetadata: 物理元数据对象（可选，**AI可以生成和整理**）
   * 物理元数据包含地点的物理特征信息，如：
@@ -453,10 +468,25 @@ ${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
 
 4. **经纬度坐标 (location)**：
    - 必须准确，精确到小数点后至少4位
-   - **重要：地址必须基于坐标生成，确保坐标和地址完全匹配**
+   - **重要：如果用户提供了地点名称（特别是英文名称），必须根据地点名称查找准确的经纬度坐标**
+   - **AI应该使用地理知识或地理编码服务来获取地点的准确坐标**
+   - **常见地点的坐标示例**：
+     * 东京塔 (Tokyo Tower): lat: 35.6586, lng: 139.7454
+     * 雷克雅未克大教堂 (Hallgrímskirkja): lat: 64.1419, lng: -21.9269
+     * 教会山 (Kirkjufell): lat: 64.9244, lng: -23.3122
    - **如果提供了经纬度但没有地址，系统会自动通过反向地理编码API获取坐标对应的准确地址，AI不需要猜测或推断地址**
    - 如果提供地址但没有坐标，可以根据地址推断坐标（但要标注为推断值）
    - **优先使用坐标地址：如果已有坐标，地址应该基于坐标生成，而不是使用其他来源的地址**
+
+5. **城市ID (cityId)**：
+   - **重要：如果用户提供了地点名称或城市信息，必须识别并输出对应的城市ID**
+   - **AI应该根据地点的地理位置（城市名称、国家代码、坐标）来识别城市ID**
+   - **识别方法**：
+     * 如果提供了城市名称，根据城市名称匹配城市ID（参考上述可用城市信息列表）
+     * 如果提供了坐标，根据坐标所在的城市匹配城市ID
+     * 如果提供了国家代码和城市名称，结合两者匹配城市ID
+     * **优先使用上述可用城市信息列表中的城市ID**
+   - **如果无法确定城市ID，可以省略该字段，系统会根据坐标自动匹配最近地点的城市ID**
 
 重要输出规则：
 1. 当用户要求整理数据时，**只输出JSON格式的数据，不要添加任何说明文字**
@@ -569,6 +599,177 @@ ${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
       // 尝试从回复中提取地点数据
       let extractedData = extractPlaceData(content);
       
+      // 尝试从用户输入中提取城市名称（优先从用户输入提取，因为更直接）
+      let extractedCityName: string | undefined;
+      if (userMessage.content) {
+        const userCityPatterns = [
+          /(?:城市|city|位于|在|地点在)[:：]?\s*([A-Za-z\u4e00-\u9fa5]+(?:市|县|区)?)/i,
+          /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:市|City|city)/i, // 英文城市名称
+          /([\u4e00-\u9fa5]+(?:市|县|区))/, // 中文城市名称
+          /(?:地点|place|location)\s+(?:在|at|in)\s+([A-Za-z\u4e00-\u9fa5]+)/i,
+        ];
+        
+        for (const pattern of userCityPatterns) {
+          const match = userMessage.content.match(pattern);
+          if (match && match[1]) {
+            extractedCityName = match[1].trim().replace(/(?:市|县|区|City|city)$/, ''); // 移除后缀
+            break;
+          }
+        }
+      }
+      
+      // 如果用户输入中没有，尝试从AI回复中提取城市名称
+      if (!extractedCityName && !extractedData?.cityId && content) {
+        // 匹配常见的城市名称模式
+        const cityNamePatterns = [
+          /(?:城市|city|位于|在)[:：]?\s*([A-Za-z\u4e00-\u9fa5]+)/i,
+          /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:市|City)/, // 英文城市名称
+          /([\u4e00-\u9fa5]+(?:市|县|区))/, // 中文城市名称
+        ];
+        
+        for (const pattern of cityNamePatterns) {
+          const match = content.match(pattern);
+          if (match && match[1]) {
+            extractedCityName = match[1].trim().replace(/(?:市|县|区|City|city)$/, ''); // 移除后缀
+            break;
+          }
+        }
+        
+        // 如果AI在JSON中提供了cityName字段（虽然不在标准格式中，但可能AI会输出）
+        try {
+          const jsonMatch = content.match(/"cityName"\s*:\s*"([^"]+)"/i);
+          if (jsonMatch && jsonMatch[1]) {
+            extractedCityName = jsonMatch[1].trim();
+          }
+        } catch {
+          // 忽略JSON解析错误
+        }
+      }
+      
+      // 如果从地址中可以提取城市名称，也尝试匹配
+      if (!extractedCityName && extractedData?.address && !extractedData?.cityId) {
+        // 从地址中提取城市名称（中文地址格式：XX市XX区...）
+        const addressCityMatch = extractedData.address.match(/([\u4e00-\u9fa5]+(?:市|县|区))/);
+        if (addressCityMatch && addressCityMatch[1]) {
+          extractedCityName = addressCityMatch[1].replace(/(?:市|县|区)$/, '');
+        }
+      }
+      
+      // 如果用户只输入了地址（没有其他结构化数据），尝试通过地址获取坐标和城市ID
+      if (!extractedData && userMessage.content.trim()) {
+        // 检查用户输入是否像是一个地址（包含常见地址关键词）
+        const addressPatterns = [
+          /(?:地址|address|位置|location)[:：]\s*(.+)/i,
+          /(.+省|.+市|.+区|.+县|.+街道|.+路|.+号)/,
+          /([A-Za-z\s]+,?\s*[A-Z]{2}\s*\d{5})/, // 美式地址格式
+        ];
+        
+        for (const pattern of addressPatterns) {
+          const match = userMessage.content.match(pattern);
+          if (match && match[1]) {
+            const address = match[1].trim();
+            try {
+              const geocodeResult = await forwardGeocode(address);
+              if (geocodeResult) {
+                extractedData = {
+                  address: geocodeResult.address || address,
+                  lat: geocodeResult.lat,
+                  lng: geocodeResult.lng,
+                };
+                
+                // 尝试匹配城市ID
+                const matchedCityId = matchCityIdByAddress(
+                  geocodeResult.address || address,
+                  geocodeResult.city,
+                  geocodeResult.countryCode
+                );
+                
+                if (matchedCityId) {
+                  extractedData.cityId = matchedCityId;
+                }
+                
+                content += `\n\n📍 **根据地址自动识别信息**：
+- 地址：${address}
+- 完整地址：${geocodeResult.address}
+- 坐标：(${geocodeResult.lat}, ${geocodeResult.lng})
+${matchedCityId ? `- 城市ID：${matchedCityId}` : '- 城市ID：未匹配到，请手动选择'}`;
+                break;
+              }
+            } catch (error) {
+              console.error('地址地理编码失败:', error);
+            }
+          }
+        }
+      }
+      
+      // 如果用户输入了地点名称但没有坐标，尝试通过正向地理编码获取坐标
+      if (!extractedData?.lat || !extractedData?.lng) {
+        // 尝试从用户输入中提取地点名称
+        // 匹配英文地点名称（常见格式：Kirkjufell, Tokyo Tower, Hallgrímskirkja等）
+        const placeNamePatterns = [
+          /(?:地点|place|location|景点|餐厅|酒店|购物|交通枢纽|名称|name)[:：]?\s*([A-Z][A-Za-z\s]+)/,
+          /([A-Z][A-Za-z\s]{2,})/, // 以大写字母开头的单词（可能是地点名称）
+        ];
+        
+        let nameENMatch = extractedData?.nameEN;
+        if (!nameENMatch) {
+          for (const pattern of placeNamePatterns) {
+            const match = userMessage.content.match(pattern);
+            if (match && match[1]) {
+              nameENMatch = match[1].trim();
+              break;
+            }
+          }
+        }
+        
+        if (nameENMatch && !extractedData?.lat && !extractedData?.lng) {
+          try {
+            // 尝试从现有地点数据中获取国家代码
+            const countryCode = displayPlaces[0]?.countryCode || displayPlaces[0]?.city?.countryCode;
+            const geocodeResult = await forwardGeocode(nameENMatch.trim(), countryCode);
+            
+            if (geocodeResult) {
+              if (!extractedData) {
+                extractedData = {};
+              }
+              extractedData.lat = geocodeResult.lat;
+              extractedData.lng = geocodeResult.lng;
+              
+              // 如果AI没有提供地址，使用地理编码获取的地址
+              if (!extractedData.address && geocodeResult.address) {
+                extractedData.address = geocodeResult.address;
+              }
+              
+              // 如果AI没有提供英文名称，使用地理编码匹配到的名称
+              if (!extractedData.nameEN && nameENMatch) {
+                extractedData.nameEN = nameENMatch.trim();
+              }
+              
+              content += `\n\n📍 **根据地点名称自动获取坐标**：
+- 地点名称：${nameENMatch}
+- 坐标：(${geocodeResult.lat}, ${geocodeResult.lng})
+- 地址：${geocodeResult.address || '已自动获取'}`;
+              
+              // 尝试根据地理编码结果匹配城市ID
+              if (!extractedData.cityId && geocodeResult.address) {
+                const matchedCityId = matchCityIdByAddress(
+                  geocodeResult.address,
+                  geocodeResult.city,
+                  geocodeResult.countryCode
+                );
+                
+                if (matchedCityId) {
+                  extractedData.cityId = matchedCityId;
+                  content += `\n- 城市：${geocodeResult.city || '已自动识别'}（匹配到城市ID：${matchedCityId}）`;
+                }
+              }
+            }
+          } catch (error) {
+            console.error('正向地理编码失败:', error);
+          }
+        }
+      }
+      
       // 如果表单中有经纬度但AI返回的数据中没有，从表单中补充
       // 这样可以确保在更新时包含最新的经纬度数据
       if (formData?.lat !== undefined && formData?.lng !== undefined) {
@@ -641,6 +842,158 @@ ${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
         }
       }
       
+      // 如果AI返回了城市名称但没有cityId，尝试根据城市名称匹配城市ID
+      if (extractedCityName && !extractedData?.cityId) {
+        try {
+          const matchedCityId = matchCityIdByName(extractedCityName);
+          if (matchedCityId) {
+            if (!extractedData) {
+              extractedData = {};
+            }
+            extractedData.cityId = matchedCityId;
+            content += `\n\n🏙️ **根据城市名称自动匹配城市ID**：
+- 识别到城市名称：${extractedCityName}
+- 匹配到城市ID：${matchedCityId}`;
+          }
+        } catch (error) {
+          console.error('根据城市名称匹配城市ID失败:', error);
+        }
+      }
+      
+      // 如果提取到地址但没有cityId，尝试根据地址自动获取城市ID
+      if (extractedData?.address && !extractedData?.cityId) {
+        try {
+          // 如果还没有坐标，先通过地址获取坐标
+          if (!extractedData.lat || !extractedData.lng) {
+            const geocodeResult = await forwardGeocode(extractedData.address);
+            if (geocodeResult) {
+              if (!extractedData.lat || !extractedData.lng) {
+                extractedData.lat = geocodeResult.lat;
+                extractedData.lng = geocodeResult.lng;
+              }
+              
+              // 根据地理编码结果匹配城市ID（优先使用地理编码返回的完整地址）
+              const matchedCityId = matchCityIdByAddress(
+                geocodeResult.address || extractedData.address,
+                geocodeResult.city,
+                geocodeResult.countryCode
+              );
+              
+              if (matchedCityId) {
+                extractedData.cityId = matchedCityId;
+                content += `\n\n🏙️ **根据地址自动识别城市ID**：
+- 地址：${extractedData.address}
+- 地理编码地址：${geocodeResult.address}
+- 城市：${geocodeResult.city || '已从地址中识别'}
+- 匹配到城市ID：${matchedCityId}
+- 坐标：(${geocodeResult.lat}, ${geocodeResult.lng})`;
+              } else {
+                content += `\n\n⚠️ **无法自动匹配城市ID**：
+- 地址：${extractedData.address}
+- 坐标：(${geocodeResult.lat}, ${geocodeResult.lng})
+- 提示：请手动选择城市ID，或提供更详细的地址信息`;
+              }
+            }
+          } else {
+            // 有坐标但没有cityId，先通过反向地理编码获取完整地址，再匹配城市ID
+            try {
+              const reverseAddr = await reverseGeocode(extractedData.lat, extractedData.lng);
+              if (reverseAddr) {
+                const matchedCityId = matchCityIdByAddress(reverseAddr);
+                if (matchedCityId) {
+                  extractedData.cityId = matchedCityId;
+                  content += `\n\n🏙️ **根据坐标地址自动识别城市ID**：
+- 坐标地址：${reverseAddr}
+- 匹配到城市ID：${matchedCityId}`;
+                } else {
+                  // 如果反向地理编码无法匹配，尝试直接匹配原始地址
+                  const matchedCityId = matchCityIdByAddress(extractedData.address);
+                  if (matchedCityId) {
+                    extractedData.cityId = matchedCityId;
+                    content += `\n\n🏙️ **根据地址自动识别城市ID**：
+- 地址：${extractedData.address}
+- 匹配到城市ID：${matchedCityId}`;
+                  }
+                }
+              } else {
+                // 反向地理编码失败，直接匹配原始地址
+                const matchedCityId = matchCityIdByAddress(extractedData.address);
+                if (matchedCityId) {
+                  extractedData.cityId = matchedCityId;
+                  content += `\n\n🏙️ **根据地址自动识别城市ID**：
+- 地址：${extractedData.address}
+- 匹配到城市ID：${matchedCityId}`;
+                }
+              }
+            } catch (error) {
+              console.error('反向地理编码失败:', error);
+              // 反向地理编码失败，直接匹配原始地址
+              const matchedCityId = matchCityIdByAddress(extractedData.address);
+              if (matchedCityId) {
+                extractedData.cityId = matchedCityId;
+                content += `\n\n🏙️ **根据地址自动识别城市ID**：
+- 地址：${extractedData.address}
+- 匹配到城市ID：${matchedCityId}`;
+              }
+            }
+          }
+        } catch (error) {
+          console.error('根据地址匹配城市ID失败:', error);
+        }
+      }
+      
+      // 如果提取到经纬度但没有cityId，尝试根据坐标匹配城市
+      if (extractedData?.lat && extractedData?.lng && !extractedData?.cityId) {
+        // 尝试通过反向地理编码获取城市信息
+        try {
+          const geocodedAddr = await reverseGeocode(extractedData.lat, extractedData.lng);
+          if (geocodedAddr) {
+            // 根据反向地理编码的地址匹配城市ID
+            const matchedCityId = matchCityIdByAddress(geocodedAddr);
+            if (matchedCityId) {
+              extractedData.cityId = matchedCityId;
+              content += `\n\n🏙️ **根据坐标地址自动识别城市ID**：
+- 坐标地址：${geocodedAddr}
+- 匹配到城市ID：${matchedCityId}`;
+            } else {
+              // 尝试从现有地点中匹配城市（优先使用最近的地点）
+              const nearest = findNearestPlace(
+                extractedData.lat,
+                extractedData.lng,
+                displayPlaces
+              );
+              
+              if (nearest?.place.city?.id) {
+                extractedData.cityId = nearest.place.city.id;
+                content += `\n\n🏙️ **根据坐标匹配到最近地点的城市ID**：
+- 最近地点：${nearest.place.nameCN} (距离: ${nearest.distance < 1 ? (nearest.distance * 1000).toFixed(0) + '米' : nearest.distance.toFixed(2) + '公里'})
+- 城市：${nearest.place.city.nameCN || nearest.place.city.name}
+- 城市ID：${nearest.place.city.id}`;
+              } else if (displayPlaces.length > 0) {
+                // 如果没有找到最近的地点，尝试使用第一个地点的城市ID（如果距离合理）
+                const firstPlace = displayPlaces[0];
+                if (firstPlace.city?.id) {
+                  // 计算距离，如果距离较近（比如在同一个国家），可以使用该城市ID
+                  const distance = firstPlace.location 
+                    ? calculateDistance(extractedData.lat, extractedData.lng, firstPlace.location.lat, firstPlace.location.lng)
+                    : Infinity;
+                  
+                  if (distance < 100) { // 100公里内认为可能是同一城市
+                    extractedData.cityId = firstPlace.city.id;
+                    content += `\n\n🏙️ **根据坐标推断城市ID**：
+- 根据坐标推断城市：${firstPlace.city.nameCN || firstPlace.city.name}
+- 城市ID：${firstPlace.city.id}
+- 注意：这是根据附近地点推断的，请确认是否正确`;
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('获取城市信息失败:', error);
+        }
+      }
+      
       // 如果提取到经纬度，尝试匹配最近的地点并添加分析信息
       if (extractedData?.lat && extractedData?.lng) {
         const nearest = findNearestPlace(
@@ -659,6 +1012,15 @@ ${JSON.stringify(currentPlaceData, null, 2)}${locationNote}
 - 最近的地点：${nearest.place.nameCN} (ID: ${nearest.place.id})
 - 距离：${distanceText}
 ${nearest.distance < 0.5 ? '✅ 距离很近，可能是同一地点' : nearest.distance < 5 ? '⚠️ 距离较近，请确认是否为同一地点' : '❌ 距离较远，可能不是同一地点'}`;
+          
+          // 如果还没有cityId，使用最近地点的城市ID
+          if (!extractedData?.cityId && nearest.place.city?.id) {
+            if (!extractedData) {
+              extractedData = {};
+            }
+            extractedData.cityId = nearest.place.city.id;
+            content += `\n- 建议城市ID：${nearest.place.city.id}（基于最近地点）`;
+          }
         } else {
           content += `\n\n📍 **位置信息**：
 - 提供的坐标：(${extractedData.lat}, ${extractedData.lng})
@@ -817,6 +1179,162 @@ ${nearest.distance < 0.5 ? '✅ 距离很近，可能是同一地点' : nearest.
   }
 
   // 反向地理编码：根据经纬度获取地址
+  // 正向地理编码：根据地点名称或地址获取坐标
+  async function forwardGeocode(placeName: string, countryCode?: string): Promise<{ lat: number; lng: number; address?: string; city?: string; countryCode?: string } | null> {
+    try {
+      // 构建查询参数
+      let query = placeName;
+      if (countryCode) {
+        query += `, ${countryCode}`;
+      }
+
+      // 使用 Nominatim (OpenStreetMap) 免费API进行正向地理编码
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=1&accept-language=zh-CN,en`,
+        {
+          headers: {
+            'User-Agent': 'TripNara-Admin/1.0',
+            'Referer': typeof window !== 'undefined' ? window.location.origin : '',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`地理编码API请求失败: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (!data || !Array.isArray(data) || data.length === 0) {
+        return null;
+      }
+
+      const result = data[0];
+      const address = result.address || {};
+      
+      return {
+        lat: parseFloat(result.lat),
+        lng: parseFloat(result.lon),
+        address: result.display_name,
+        city: address.city || address.town || address.village || address.municipality,
+        countryCode: address.country_code?.toUpperCase(),
+      };
+    } catch (error) {
+      console.error('正向地理编码失败:', error, { placeName, countryCode });
+      return null;
+    }
+  }
+
+  // 根据城市名称匹配城市ID（不依赖地址）
+  function matchCityIdByName(cityName: string, countryCode?: string): number | null {
+    if (!displayPlaces || displayPlaces.length === 0 || !cityName) {
+      return null;
+    }
+
+    const cityNameLower = cityName.toLowerCase().trim();
+    if (!cityNameLower) return null;
+
+    // 匹配城市
+    for (const place of displayPlaces) {
+      if (!place.city) continue;
+
+      const placeCityName = place.city.name?.toLowerCase() || '';
+      const placeCityNameCN = place.city.nameCN?.toLowerCase() || '';
+      const placeCityNameEN = place.city.nameEN?.toLowerCase() || '';
+      const placeCountryCode = place.city.countryCode?.toUpperCase() || place.countryCode?.toUpperCase() || '';
+
+      // 精确匹配城市名称（中文、英文）
+      if (
+        placeCityName === cityNameLower ||
+        placeCityNameCN === cityNameLower ||
+        placeCityNameEN === cityNameLower
+      ) {
+        // 如果提供了国家代码，需要匹配
+        if (countryCode && placeCountryCode && placeCountryCode !== countryCode.toUpperCase()) {
+          continue;
+        }
+        return place.city.id;
+      }
+
+      // 部分匹配（城市名称包含在输入中，或输入包含在城市名称中）
+      if (
+        (placeCityNameCN && (cityNameLower.includes(placeCityNameCN) || placeCityNameCN.includes(cityNameLower))) ||
+        (placeCityNameEN && (cityNameLower.includes(placeCityNameEN) || placeCityNameEN.includes(cityNameLower))) ||
+        (placeCityName && (cityNameLower.includes(placeCityName) || placeCityName.includes(cityNameLower)))
+      ) {
+        if (countryCode && placeCountryCode && placeCountryCode !== countryCode.toUpperCase()) {
+          continue;
+        }
+        return place.city.id;
+      }
+    }
+
+    return null;
+  }
+
+  // 根据地址或城市名称匹配城市ID
+  function matchCityIdByAddress(address: string, cityName?: string, countryCode?: string): number | null {
+    if (!displayPlaces || displayPlaces.length === 0) {
+      return null;
+    }
+
+    // 如果提供了城市名称，优先使用城市名称匹配（更准确）
+    if (cityName) {
+      const matchedById = matchCityIdByName(cityName, countryCode);
+      if (matchedById) {
+        return matchedById;
+      }
+    }
+
+    // 尝试从地址中提取城市名称
+    const addressLower = address.toLowerCase();
+    const cityNameLower = cityName?.toLowerCase() || '';
+
+    // 匹配城市
+    for (const place of displayPlaces) {
+      if (!place.city) continue;
+
+      const placeCityName = place.city.name?.toLowerCase() || '';
+      const placeCityNameCN = place.city.nameCN?.toLowerCase() || '';
+      const placeCityNameEN = place.city.nameEN?.toLowerCase() || '';
+      const placeCountryCode = place.city.countryCode?.toUpperCase() || place.countryCode?.toUpperCase() || '';
+
+      // 匹配城市名称（中文、英文）
+      if (cityNameLower && (
+        placeCityName === cityNameLower ||
+        placeCityNameCN === cityNameLower ||
+        placeCityNameEN === cityNameLower
+      )) {
+        // 如果提供了国家代码，需要匹配
+        if (countryCode && placeCountryCode && placeCountryCode !== countryCode.toUpperCase()) {
+          continue;
+        }
+        return place.city.id;
+      }
+
+      // 匹配地址中的城市名称
+      if (placeCityName && addressLower.includes(placeCityName)) {
+        if (countryCode && placeCountryCode && placeCountryCode !== countryCode.toUpperCase()) {
+          continue;
+        }
+        return place.city.id;
+      }
+      if (placeCityNameCN && addressLower.includes(placeCityNameCN)) {
+        if (countryCode && placeCountryCode && placeCountryCode !== countryCode.toUpperCase()) {
+          continue;
+        }
+        return place.city.id;
+      }
+      if (placeCityNameEN && addressLower.includes(placeCityNameEN)) {
+        if (countryCode && placeCountryCode && placeCountryCode !== countryCode.toUpperCase()) {
+          continue;
+        }
+        return place.city.id;
+      }
+    }
+
+    return null;
+  }
+
   async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
     setGeocoding(true);
     try {

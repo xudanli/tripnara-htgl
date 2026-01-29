@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search, Eye, Edit, Trash2, MapPin, Copy } from 'lucide-react';
+import { Search, Eye, Edit, Trash2, MapPin, Copy, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getPlaces, deletePlace } from '@/services/places';
-import type { PlaceListItem, GetPlacesParams, PlaceCategory } from '@/types/api';
+import { getPlaces, deletePlace, createPlace } from '@/services/places';
+import type { PlaceListItem, GetPlacesParams, PlaceCategory, CreatePlaceDto } from '@/types/api';
 import DeepSeekAssistant from '@/components/places/DeepSeekAssistant';
+import { useRouter } from 'next/navigation';
 
 const categoryLabels: Record<PlaceCategory, string> = {
   ATTRACTION: '景点',
@@ -26,6 +27,7 @@ const categoryColors: Record<PlaceCategory, string> = {
 };
 
 export default function PlacesPage() {
+  const router = useRouter();
   const [places, setPlaces] = useState<PlaceListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [params, setParams] = useState<GetPlacesParams>({
@@ -147,12 +149,18 @@ export default function PlacesPage() {
           <h1 className="text-3xl font-bold">地点/POI管理</h1>
           <p className="text-muted-foreground mt-2">管理系统中的所有地点</p>
         </div>
-        <Link href="/admin/places/duplicates">
-          <Button variant="outline">
-            <Copy className="mr-2 h-4 w-4" />
-            检测重复地点
+        <div className="flex gap-2">
+          <Button onClick={() => router.push('/admin/places/new')}>
+            <Plus className="mr-2 h-4 w-4" />
+            新增地点
           </Button>
-        </Link>
+          <Link href="/admin/places/duplicates">
+            <Button variant="outline">
+              <Copy className="mr-2 h-4 w-4" />
+              检测重复地点
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* 搜索和筛选 */}

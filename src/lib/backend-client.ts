@@ -147,9 +147,14 @@ export async function proxyPutToBackend<T = unknown>(
   path: string,
   body?: unknown
 ): Promise<Response> {
+  // 调试：打印序列化前后的数据
+  const serializedBody = body ? JSON.stringify(body) : undefined;
+  console.log('[proxyPutToBackend] 原始 body.dayPlans:', JSON.stringify((body as Record<string, unknown>)?.dayPlans));
+  console.log('[proxyPutToBackend] 序列化后的 body:', serializedBody?.substring(0, 500));
+  
   return proxyToBackend<T>(path, {
     method: 'PUT',
-    body: body ? JSON.stringify(body) : undefined,
+    body: serializedBody,
   });
 }
 

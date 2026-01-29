@@ -422,6 +422,20 @@ export interface GetPlacesResponse {
   hasNext?: boolean; // 是否有下一页
 }
 
+export interface CreatePlaceDto {
+  nameCN: string; // 必填：中文名称
+  nameEN?: string; // 可选：英文名称
+  category: PlaceCategory; // 必填：地点类别
+  lat: number; // 必填：纬度
+  lng: number; // 必填：经度
+  address?: string; // 可选：地址
+  cityId: number; // 必填：城市ID
+  metadata?: any; // 可选：元数据（JSON对象）
+  googlePlaceId?: string; // 可选：Google Place ID
+  rating?: number; // 可选：评分（0-5）
+  description?: string; // 可选：地点介绍
+}
+
 export interface UpdatePlaceRequest {
   nameCN?: string;
   nameEN?: string;

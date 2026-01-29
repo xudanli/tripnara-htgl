@@ -243,17 +243,19 @@ export async function updateRouteTemplate(
 ): Promise<RouteTemplate | null> {
   const response = await apiPut<RouteTemplate>(`/route-directions/templates/${id}`, data);
   
-  if (response.success) {
+  if (response.success && response.data) {
     return response.data;
   }
   
-  console.error('更新路线模板失败:', response.error);
-  return null;
+  const errorCode = response.error?.code || 'UNKNOWN_ERROR';
+  const errorMessage = response.error?.message || '更新路线模板失败';
+  throw new Error(`[${errorCode}] ${errorMessage}`);
 }
 
 /**
  * 删除路线模板（软删除）
  * DELETE /route-directions/templates/:id
+ * @param id 模板ID
  */
 export async function deleteRouteTemplate(
   id: number
@@ -265,6 +267,78 @@ export async function deleteRouteTemplate(
   }
   
   console.error('删除路线模板失败:', response.error);
+  return null;
+}
+
+/**
+ * 物理删除路线模板（从数据库彻底删除）
+ * DELETE /route-directions/templates/:id/hard
+ * @param id 模板ID
+ */
+export async function hardDeleteRouteTemplate(
+  id: number
+): Promise<{ message: string } | null> {
+  const response = await apiDelete<{ message: string }>(`/route-directions/templates/${id}/hard`);
+  
+  if (response.success) {
+    return response.data;
+  }
+  
+  console.error('物理删除路线模板失败:', response.error);
+  return null;
+}
+
+/**
+ * 获取路线模板可用的POI列表
+ * GET /route-directions/templates/:id/available-pois
+ * 根据路线模板关联的路线方向，自动获取该国家/地区的可用POI列表
+ * @param id 模板ID
+ * @param params 查询参数
+ */
+export async function getAvailablePOIsForTemplate(
+  id: number,
+  params?: {
+    category?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }
+): Promise<{
+  places: any[];
+  total: number;
+  page: number;
+  limit: number;
+  routeDirection?: {
+    id: number;
+    countryCode: string;
+    nameCN?: string;
+    nameEN?: string;
+  };
+} | null> {
+  const queryParams: Record<string, string | number> = {};
+  if (params?.category) queryParams.category = params.category;
+  if (params?.search) queryParams.search = params.search;
+  if (params?.page !== undefined) queryParams.page = params.page;
+  if (params?.limit !== undefined) queryParams.limit = params.limit;
+  
+  const response = await apiGet<{
+    places: any[];
+    total: number;
+    page: number;
+    limit: number;
+    routeDirection?: {
+      id: number;
+      countryCode: string;
+      nameCN?: string;
+      nameEN?: string;
+    };
+  }>(`/route-directions/templates/${id}/available-pois`, queryParams);
+  
+  if (response.success) {
+    return response.data;
+  }
+  
+  console.error('获取可用POI列表失败:', response.error);
   return null;
 }
 

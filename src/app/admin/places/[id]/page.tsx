@@ -33,6 +33,7 @@ export default function PlaceDetailPage() {
   const [prevPlaceId, setPrevPlaceId] = useState<number | null>(null);
   const [nextPlaceId, setNextPlaceId] = useState<number | null>(null);
   const [loadingNeighbors, setLoadingNeighbors] = useState(false);
+  const [samplePlaces, setSamplePlaces] = useState<PlaceListItem[]>([]); // 示例地点，用于根据坐标匹配城市ID
   const [formData, setFormData] = useState<UpdatePlaceRequest>({
     nameCN: '',
     nameEN: '',
@@ -47,6 +48,118 @@ export default function PlaceDetailPage() {
     metadata: {},
     physicalMetadata: {},
   });
+
+  // 加载示例地点（用于根据坐标匹配城市ID）
+  useEffect(() => {
+    async function loadSamplePlaces() {
+      const result = await getPlaces({
+        limit: 500, // 获取更多地点以用于匹配城市ID
+        page: 1,
+      });
+      if (result) {
+        setSamplePlaces(result.places);
+      }
+    }
+    loadSamplePlaces();
+  }, []);
+
+  // 根据经纬度自动获取城市ID（仅在编辑时，如果城市ID为空）
+  useEffect(() => {
+    // 只有当有经纬度但没有城市ID时才自动获取
+    if (formData.lat && formData.lng && !formData.cityId && samplePlaces.length > 0) {
+      // 防抖：延迟500ms执行，避免频繁请求
+      const timer = setTimeout(async () => {
+        try {
+          // 使用反向地理编码获取地址
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${formData.lat}&lon=${formData.lng}&addressdetails=1&accept-language=zh-CN,en&zoom=18`,
+            {
+              headers: {
+                'User-Agent': 'TripNara-Admin/1.0',
+                'Referer': typeof window !== 'undefined' ? window.location.origin : '',
+              },
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.address) {
+              const address = data.display_name || '';
+              const cityName = data.address.city || data.address.town || data.address.village || data.address.municipality;
+              const countryCode = data.address.country_code?.toUpperCase();
+
+              // 根据地址匹配城市ID
+              if (address && samplePlaces.length > 0) {
+                // 匹配城市
+                for (const place of samplePlaces) {
+                  if (!place.city) continue;
+
+                  const placeCityName = place.city.name?.toLowerCase() || '';
+                  const placeCityNameCN = place.city.nameCN?.toLowerCase() || '';
+                  const placeCityNameEN = place.city.nameEN?.toLowerCase() || '';
+                  const placeCountryCode = place.city.countryCode?.toUpperCase() || place.countryCode?.toUpperCase() || '';
+                  const addressLower = address.toLowerCase();
+                  const cityNameLower = cityName?.toLowerCase() || '';
+
+                  // 优先使用城市名称匹配
+                  if (cityNameLower && (
+                    placeCityName === cityNameLower ||
+                    placeCityNameCN === cityNameLower ||
+                    placeCityNameEN === cityNameLower
+                  )) {
+                    if (countryCode && placeCountryCode && placeCountryCode !== countryCode) {
+                      continue;
+                    }
+                    setFormData((prev) => ({ ...prev, cityId: place.city!.id }));
+                    return;
+                  }
+
+                  // 匹配地址中的城市名称
+                  if (
+                    (placeCityNameCN && addressLower.includes(placeCityNameCN)) ||
+                    (placeCityNameEN && addressLower.includes(placeCityNameEN)) ||
+                    (placeCityName && addressLower.includes(placeCityName))
+                  ) {
+                    if (countryCode && placeCountryCode && placeCountryCode !== countryCode) {
+                      continue;
+                    }
+                    setFormData((prev) => ({ ...prev, cityId: place.city!.id }));
+                    return;
+                  }
+                }
+
+                // 如果地址匹配失败，尝试根据坐标匹配最近的地点
+                let nearest: { place: PlaceListItem; distance: number } | null = null;
+                let minDistance = Infinity;
+
+                for (const place of samplePlaces) {
+                  if (place.location?.lat && place.location?.lng) {
+                    const distance = Math.sqrt(
+                      Math.pow(place.location.lat - formData.lat!, 2) +
+                      Math.pow(place.location.lng - formData.lng!, 2)
+                    ) * 111; // 粗略转换为公里
+                    if (distance < minDistance) {
+                      minDistance = distance;
+                      nearest = { place, distance };
+                    }
+                  }
+                }
+
+                if (nearest && nearest.place.city && nearest.distance < 50) {
+                  // 50公里内认为可能是同一城市
+                  setFormData((prev) => ({ ...prev, cityId: nearest!.place.city!.id }));
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('根据经纬度获取城市ID失败:', error);
+        }
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [formData.lat, formData.lng, formData.cityId, samplePlaces]);
 
   useEffect(() => {
     if (placeId && !isNaN(placeId)) {
@@ -478,7 +591,7 @@ export default function PlaceDetailPage() {
                   }))
                 }
                 className="mt-1"
-                placeholder="1"
+                placeholder="城市ID"
                 title="城市ID通常由系统自动关联，不建议手动修改"
               />
             </div>

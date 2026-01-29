@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Search, Eye, Edit, Trash2, Plus, Calendar } from 'lucide-react';
+import { Search, Eye, Edit, Trash2, Plus, Calendar, Power } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   getRouteTemplates,
-  deleteRouteTemplate,
+  hardDeleteRouteTemplate,
   createRouteTemplate,
+  updateRouteTemplate,
+  getRouteTemplateById,
 } from '@/services/route-directions';
 import type {
   RouteTemplate,
@@ -65,15 +67,55 @@ export default function RouteTemplatesPage() {
     }
   }
 
-  async function handleDelete(id: number) {
-    if (!confirm('确定要删除这个路线模板吗？')) {
+  async function handleToggleActive(id: number, currentActive: boolean) {
+    const newActiveState = !currentActive;
+    const action = newActiveState ? '激活' : '禁用';
+    
+    if (!confirm(`确定要${action}这个路线模板吗？`)) {
       return;
     }
 
     try {
-      const result = await deleteRouteTemplate(id);
+      const templateData = await getRouteTemplateById(id);
+      if (!templateData) {
+        alert('获取模板信息失败');
+        return;
+      }
+
+      const updated = await updateRouteTemplate(id, {
+        routeDirectionId: templateData.routeDirectionId,
+        durationDays: templateData.durationDays,
+        name: templateData.name,
+        nameCN: templateData.nameCN,
+        nameEN: templateData.nameEN,
+        dayPlans: templateData.dayPlans || [],
+        defaultPacePreference: templateData.defaultPacePreference,
+        isActive: newActiveState,
+      });
+
+      if (updated) {
+        alert(`${action}成功`);
+        loadTemplates();
+      }
+    } catch (error) {
+      console.error(`${action}失败:`, error);
+      alert(`${action}失败，请重试`);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm('⚠️ 警告：确定要删除这个路线模板吗？\n\n删除后数据将无法恢复！')) {
+      return;
+    }
+
+    if (!confirm('请再次确认：这将永久删除该模板，无法恢复！')) {
+      return;
+    }
+
+    try {
+      const result = await hardDeleteRouteTemplate(id);
       if (result) {
-        alert('删除成功');
+        alert('已删除');
         loadTemplates();
       }
     } catch (error) {
@@ -418,21 +460,32 @@ export default function RouteTemplatesPage() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
                           <Link href={`/admin/route-directions/templates/${template.id}`}>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" title="查看详情">
                               <Eye className="h-4 w-4" />
                             </Button>
                           </Link>
                           <Link href={`/admin/route-directions/templates/${template.id}`}>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" title="编辑">
                               <Edit className="h-4 w-4" />
                             </Button>
                           </Link>
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDelete(template.id)}
+                            onClick={() => handleToggleActive(template.id, template.isActive)}
+                            title={template.isActive ? '禁用' : '激活'}
+                            className={template.isActive ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'}
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Power className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(template.id)}
+                            title="删除（永久删除，不可恢复）"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </td>
